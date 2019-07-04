@@ -130,9 +130,11 @@ def single_simulation(
 ):
 
     CRN.set_species_initial_value(initial_values)
-    trajectories = CRN.run(number_of_trajectories=nb_trajectories,
-                           solver=StochKitSolver,
-                           show_labels=False)
+    trajectories = CRN.run(
+        number_of_trajectories=nb_trajectories,
+        solver=StochKitSolver,
+        show_labels=False
+    )
     data = np.array(trajectories)
     save_simulation_data(data, dataset_folder, prefix, id_number)
 
