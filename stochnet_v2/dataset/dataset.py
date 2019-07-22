@@ -8,17 +8,7 @@ import tensorflow as tf
 from bidict import bidict
 from sklearn.preprocessing.data import StandardScaler, MinMaxScaler
 from tqdm import tqdm
-
-
-class ShapeError(Exception):
-    """Exception raised for errors in the input shape.
-
-    Attributes:
-        message -- explanation of the error
-    """
-
-    def __init__(self, message='Wrong shape!'):
-        self.message = message
+from stochnet_v2.utils.errors import ShapeError
 
 
 class DataTransformer:
