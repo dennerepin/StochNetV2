@@ -1,13 +1,29 @@
 import abc
 import tensorflow as tf
 
-from stochnet_v2.utils.errors import ShapeError
-from stochnet_v2.utils.errors import DimensionError
 from stochnet_v2.static_classes.random_variables import Categorical
 from stochnet_v2.static_classes.random_variables import MultivariateNormalDiag
 from stochnet_v2.static_classes.random_variables import MultivariateNormalTriL
 from stochnet_v2.static_classes.random_variables import MultivariateLogNormalTriL
 from stochnet_v2.static_classes.random_variables import Mixture
+from stochnet_v2.utils.errors import ShapeError
+from stochnet_v2.utils.errors import DimensionError
+from stochnet_v2.utils.registry import Registry
+
+
+MIXTURE_COMPONENTS_REGISTRY = Registry(name='MixtureComponentsDescriptionsRegistry')
+KERNEL_CONSTRAINTS_REGISTRY = Registry(name='KernelConstraintsRegistry')
+REGULARIZERS_REGISTRY = Registry(name='RegularizersRegistry')
+
+KERNEL_CONSTRAINTS_REGISTRY['maxnorm'] = tf.keras.constraints.MaxNorm(3)
+KERNEL_CONSTRAINTS_REGISTRY['minmaxnorm'] = tf.keras.constraints.MinMaxNorm(3)
+KERNEL_CONSTRAINTS_REGISTRY['unitnorm'] = tf.keras.constraints.UnitNorm(3)
+KERNEL_CONSTRAINTS_REGISTRY['none'] = None
+
+REGULARIZERS_REGISTRY['l1'] = tf.keras.regularizers.l1()
+REGULARIZERS_REGISTRY['l2'] = tf.keras.regularizers.l2()
+REGULARIZERS_REGISTRY['l1_l2'] = tf.keras.regularizers.l1_l2()
+REGULARIZERS_REGISTRY['none'] = None
 
 
 class RandomVariableOutputLayer(abc.ABC):
@@ -21,15 +37,7 @@ class RandomVariableOutputLayer(abc.ABC):
         self._sample_space_dimension = None
         self._number_of_output_neurons = None
 
-    # def __new__(cls, *args, **kwargs):
-    #     cls._pred_placeholder = tf.placeholder(
-    #         dtype=tf.float32,
-    #         shape=(None, cls.number_of_output_neurons),
-    #         name='pred_placeholder',
-    #     )
-    #     cls._random_variable = cls.get_random_variable(cls._pred_placeholder)
-    #     cls._sample_shape_placeholder = tf.placeholder(tf.int32, None, name='sample_shape_placeholder')
-    #     cls._sample_tensor = cls._random_variable.sample(cls._sample_shape_placeholder)
+        self.name_scope = self.__class__.__name__
 
     @abc.abstractmethod
     def add_layer_on_top(self, base_model):
@@ -45,7 +53,7 @@ class RandomVariableOutputLayer(abc.ABC):
         """Given the values of a tensor produced by a neural network with a layer
         on top of the form of the one provided by the add_layer_on_top method,
         it returns an instance of the corresponding tensor random variable class
-        initialized using the parameters provived by the neural network output.
+        initialized using the parameters provided by the neural network output.
         Additional checks might be needed for certain families of random variables.
         """
 
@@ -54,7 +62,6 @@ class RandomVariableOutputLayer(abc.ABC):
     def number_of_output_neurons(self):
         pass
 
-    # @abc.abstractmethod
     def check_input_shape(self, nn_prediction):
         """The method check that nn_prediction has the following shape:
         [batch_size, number_of_output_neurons]
@@ -68,27 +75,25 @@ class RandomVariableOutputLayer(abc.ABC):
                 f"{shape}"
             )
 
-    # @abc.abstractmethod
     def get_description(self, nn_prediction):
-        """Return a string containing a description of the random variables inizialized
+        """Return a string containing a description of the random variables initialized
         using the parameters in nn_prediction"""
         # TODO: fixme: get description w/o re-creating graph for random variable?
         random_variable = self.get_random_variable(nn_prediction)
         description = random_variable.get_description()
         return description
 
-    # @abc.abstractmethod
     def _build_sampling_graph(self):
-        self._pred_placeholder = tf.placeholder(
-            dtype=tf.float32,
-            shape=(None, self.number_of_output_neurons),
-            name='pred_placeholder',
-        )
-        self._random_variable = self.get_random_variable(self._pred_placeholder)
-        self._sample_shape_placeholder = tf.placeholder(tf.int32, None, name='sample_shape_placeholder')
-        self._sample_tensor = self._random_variable.sample(self._sample_shape_placeholder)
+        with tf.variable_scope(self.name_scope + '/sample'):
+            self._pred_placeholder = tf.compat.v1.placeholder(
+                dtype=tf.float32,
+                shape=(None, self.number_of_output_neurons),
+                name='pred_placeholder',
+            )
+            self._random_variable = self.get_random_variable(self._pred_placeholder)
+            self._sample_shape_placeholder = tf.compat.v1.placeholder(tf.int32, None, name='sample_shape_placeholder')
+            self._sample_tensor = self._random_variable.sample(self._sample_shape_placeholder)
 
-    # @abc.abstractmethod
     def sample(self, nn_prediction_np, sample_shape=(), sess=None):
 
         if self._sample_tensor is None:
@@ -151,28 +156,30 @@ class CategoricalOutputLayer(RandomVariableOutputLayer):
 
     def add_layer_on_top(self, base_model):
 
-        if self.hidden_size:
-            base_model = tf.keras.layers.Dense(
-                self.hidden_size,
+        with tf.variable_scope(self.name_scope):
+
+            if self.hidden_size:
+                base_model = tf.keras.layers.Dense(
+                    self.hidden_size,
+                    kernel_constraint=self._kernel_constraint,
+                    activity_regularizer=self._regularizer,
+                )(base_model)
+                base_model1 = tf.keras.layers.LeakyReLU(0.2)(base_model)
+                base_model1 = tf.keras.layers.Dense(
+                    self.hidden_size,
+                    kernel_constraint=self._kernel_constraint,
+                    activity_regularizer=self._regularizer,
+                )(base_model1)
+                base_model = tf.keras.layers.Add()([base_model, base_model1])
+
+            logits = tf.keras.layers.Dense(
+                self.number_of_output_neurons,
+                activation=None,
                 kernel_constraint=self._kernel_constraint,
                 activity_regularizer=self._regularizer,
             )(base_model)
-            base_model1 = tf.keras.layers.LeakyReLU(0.2)(base_model)
-            base_model1 = tf.keras.layers.Dense(
-                self.hidden_size,
-                kernel_constraint=self._kernel_constraint,
-                activity_regularizer=self._regularizer,
-            )(base_model1)
-            base_model = tf.keras.layers.Add()([base_model, base_model1])
 
-        logits = tf.keras.layers.Dense(
-            self.number_of_output_neurons,
-            activation=None,
-            kernel_constraint=self._kernel_constraint,
-            activity_regularizer=self._regularizer,
-        )(base_model)
-
-        return logits
+            return logits
 
     def get_random_variable(self, nn_prediction_tensor):
         self.check_input_shape(nn_prediction_tensor)
@@ -185,19 +192,8 @@ class CategoricalOutputLayer(RandomVariableOutputLayer):
         )
         return loss
 
-    # def check_input_shape(self, input_):
-    #     super().check_input_shape(input_)
 
-    # def get_description(self, nn_prediction):
-    #     return super().get_description(nn_prediction)
-
-    # def _build_sampling_graph(self):
-    #     super()._build_sampling_graph()
-
-    # def sample(self, nn_prediction, sample_shape=(), sess=None):
-    #     return super().sample(nn_prediction, sample_shape, sess)
-
-
+@MIXTURE_COMPONENTS_REGISTRY.register('normal_diag')
 class MultivariateNormalDiagOutputLayer(RandomVariableOutputLayer):
 
     def __init__(
@@ -235,52 +231,58 @@ class MultivariateNormalDiagOutputLayer(RandomVariableOutputLayer):
         return self._number_of_output_neurons
 
     def add_layer_on_top(self, base_model):
-        mu, diag = tf.keras.layers.Lambda(
-            lambda x: tf.split(x, num_or_size_splits=2, axis=-1)
-        )(base_model)
 
-        if self.hidden_size:
+        with tf.variable_scope(self.name_scope):
+
+            s = base_model.shape.as_list()[-1]
+
+            mu, diag = tf.keras.layers.Lambda(
+                # lambda x: tf.split(x, num_or_size_splits=2, axis=-1)
+                lambda x: tf.split(x, num_or_size_splits=[s//2, s - s//2], axis=-1)
+            )(base_model)
+
+            if self.hidden_size:
+                mu = tf.keras.layers.Dense(
+                    self.hidden_size,
+                    kernel_constraint=self._kernel_constraint,
+                    activity_regularizer=self._mu_regularizer,
+                )(mu)
+                mu1 = tf.keras.layers.LeakyReLU(0.2)(mu)
+                mu1 = tf.keras.layers.Dense(
+                    self.hidden_size,
+                    kernel_constraint=self._kernel_constraint,
+                    activity_regularizer=self._mu_regularizer,
+                )(mu1)
+                mu = tf.keras.layers.Add()([mu, mu1])
+
+                diag = tf.keras.layers.Dense(
+                    self.hidden_size,
+                    kernel_constraint=self._kernel_constraint,
+                    activity_regularizer=self._diag_regularizer,
+                )(diag)
+                diag1 = tf.keras.layers.LeakyReLU(0.2)(diag)
+                diag1 = tf.keras.layers.Dense(
+                    self.hidden_size,
+                    kernel_constraint=self._kernel_constraint,
+                    activity_regularizer=self._diag_regularizer,
+                )(diag1)
+                diag = tf.keras.layers.Add()([diag, diag1])
+
             mu = tf.keras.layers.Dense(
-                self.hidden_size,
+                self._sample_space_dimension,
+                activation=None,
                 kernel_constraint=self._kernel_constraint,
                 activity_regularizer=self._mu_regularizer,
             )(mu)
-            mu1 = tf.keras.layers.LeakyReLU(0.2)(mu)
-            mu1 = tf.keras.layers.Dense(
-                self.hidden_size,
-                kernel_constraint=self._kernel_constraint,
-                activity_regularizer=self._mu_regularizer,
-            )(mu1)
-            mu = tf.keras.layers.Add()([mu, mu1])
 
             diag = tf.keras.layers.Dense(
-                self.hidden_size,
+                self._sample_space_dimension,
+                activation=tf.exp,
                 kernel_constraint=self._kernel_constraint,
                 activity_regularizer=self._diag_regularizer,
             )(diag)
-            diag1 = tf.keras.layers.LeakyReLU(0.2)(diag)
-            diag1 = tf.keras.layers.Dense(
-                self.hidden_size,
-                kernel_constraint=self._kernel_constraint,
-                activity_regularizer=self._diag_regularizer,
-            )(diag1)
-            diag = tf.keras.layers.Add()([diag, diag1])
 
-        mu = tf.keras.layers.Dense(
-            self._sample_space_dimension,
-            activation=None,
-            kernel_constraint=self._kernel_constraint,
-            activity_regularizer=self._mu_regularizer,
-        )(mu)
-
-        diag = tf.keras.layers.Dense(
-            self._sample_space_dimension,
-            activation=tf.exp,
-            kernel_constraint=self._kernel_constraint,
-            activity_regularizer=self._diag_regularizer,
-        )(diag)
-
-        return tf.keras.layers.Concatenate(axis=-1)([mu, diag])
+            return tf.keras.layers.Concatenate(axis=-1)([mu, diag])
 
     def get_random_variable(self, nn_prediction_tensor):
         self.check_input_shape(nn_prediction_tensor)
@@ -298,13 +300,15 @@ class MultivariateNormalDiagOutputLayer(RandomVariableOutputLayer):
 
     def loss_function(self, y_true, y_pred):
         loss = - self.log_likelihood(y_true, y_pred)
-        loss = tf.reshape(loss, [-1])
+        # loss = tf.reshape(loss, [-1])
+        loss = tf.math.reduce_mean(loss)
         return loss
 
     def log_likelihood(self, y_true, y_pred):
         return self.get_random_variable(y_pred).log_prob(y_true)
 
 
+@MIXTURE_COMPONENTS_REGISTRY.register('normal_tril')
 class MultivariateNormalTriLOutputLayer(RandomVariableOutputLayer):
 
     def __init__(
@@ -346,75 +350,77 @@ class MultivariateNormalTriLOutputLayer(RandomVariableOutputLayer):
 
     def add_layer_on_top(self, base_model):
 
-        shape = base_model.shape.as_list()
-        s = shape[-1] // 3
+        with tf.variable_scope(self.name_scope):
 
-        mu, diag, sub_diag = tf.keras.layers.Lambda(
-            lambda x: tf.split(x, num_or_size_splits=[s, s, shape[-1] - 2 * s], axis=-1)
-        )(base_model)
+            shape = base_model.shape.as_list()
+            s = shape[-1] // 3
 
-        if self.hidden_size:
+            mu, diag, sub_diag = tf.keras.layers.Lambda(
+                lambda x: tf.split(x, num_or_size_splits=[s, s, shape[-1] - 2 * s], axis=-1)
+            )(base_model)
+
+            if self.hidden_size:
+                mu = tf.keras.layers.Dense(
+                    self.hidden_size,
+                    kernel_constraint=self._kernel_constraint,
+                    activity_regularizer=self._mu_regularizer,
+                )(mu)
+                mu1 = tf.keras.layers.LeakyReLU(0.2)(mu)
+                mu1 = tf.keras.layers.Dense(
+                    self.hidden_size,
+                    kernel_constraint=self._kernel_constraint,
+                    activity_regularizer=self._mu_regularizer,
+                )(mu1)
+                mu = tf.keras.layers.Add()([mu, mu1])
+
+                diag = tf.keras.layers.Dense(
+                    self.hidden_size,
+                    kernel_constraint=self._kernel_constraint,
+                    activity_regularizer=self._diag_regularizer,
+                )(diag)
+                diag1 = tf.keras.layers.LeakyReLU(0.2)(diag)
+                diag1 = tf.keras.layers.Dense(
+                    self.hidden_size,
+                    kernel_constraint=self._kernel_constraint,
+                    activity_regularizer=self._diag_regularizer,
+                )(diag1)
+                diag = tf.keras.layers.Add()([diag, diag1])
+
+                sub_diag = tf.keras.layers.Dense(
+                    self.hidden_size,
+                    kernel_constraint=self._kernel_constraint,
+                    activity_regularizer=self._sub_diag_regularizer,
+                )(sub_diag)
+                sub_diag1 = tf.keras.layers.LeakyReLU(0.2)(sub_diag)
+                sub_diag1 = tf.keras.layers.Dense(
+                    self.hidden_size,
+                    kernel_constraint=self._kernel_constraint,
+                    activity_regularizer=self._sub_diag_regularizer,
+                )(sub_diag1)
+                sub_diag = tf.keras.layers.Add()([sub_diag, sub_diag1])
+
             mu = tf.keras.layers.Dense(
-                self.hidden_size,
+                self._sample_space_dimension,
+                activation=None,
                 kernel_constraint=self._kernel_constraint,
                 activity_regularizer=self._mu_regularizer,
             )(mu)
-            mu1 = tf.keras.layers.LeakyReLU(0.2)(mu)
-            mu1 = tf.keras.layers.Dense(
-                self.hidden_size,
-                kernel_constraint=self._kernel_constraint,
-                activity_regularizer=self._mu_regularizer,
-            )(mu1)
-            mu = tf.keras.layers.Add()([mu, mu1])
 
             diag = tf.keras.layers.Dense(
-                self.hidden_size,
+                self._sample_space_dimension,
+                activation='exponential',
                 kernel_constraint=self._kernel_constraint,
                 activity_regularizer=self._diag_regularizer,
             )(diag)
-            diag1 = tf.keras.layers.LeakyReLU(0.2)(diag)
-            diag1 = tf.keras.layers.Dense(
-                self.hidden_size,
-                kernel_constraint=self._kernel_constraint,
-                activity_regularizer=self._diag_regularizer,
-            )(diag1)
-            diag = tf.keras.layers.Add()([diag, diag1])
 
             sub_diag = tf.keras.layers.Dense(
-                self.hidden_size,
+                self._number_of_sub_diag_entries,
+                activation=None,
                 kernel_constraint=self._kernel_constraint,
                 activity_regularizer=self._sub_diag_regularizer,
             )(sub_diag)
-            sub_diag1 = tf.keras.layers.LeakyReLU(0.2)(sub_diag)
-            sub_diag1 = tf.keras.layers.Dense(
-                self.hidden_size,
-                kernel_constraint=self._kernel_constraint,
-                activity_regularizer=self._sub_diag_regularizer,
-            )(sub_diag1)
-            sub_diag = tf.keras.layers.Add()([sub_diag, sub_diag1])
 
-        mu = tf.keras.layers.Dense(
-            self._sample_space_dimension,
-            activation=None,
-            kernel_constraint=self._kernel_constraint,
-            activity_regularizer=self._mu_regularizer,
-        )(mu)
-
-        diag = tf.keras.layers.Dense(
-            self._sample_space_dimension,
-            activation=tf.exp,
-            kernel_constraint=self._kernel_constraint,
-            activity_regularizer=self._diag_regularizer,
-        )(diag)
-
-        sub_diag = tf.keras.layers.Dense(
-            self._number_of_sub_diag_entries,
-            activation=None,
-            kernel_constraint=self._kernel_constraint,
-            activity_regularizer=self._sub_diag_regularizer,
-        )(sub_diag)
-
-        return tf.keras.layers.Concatenate(axis=-1)([mu, diag, sub_diag])
+            return tf.keras.layers.Concatenate(axis=-1)([mu, diag, sub_diag])
 
     def get_random_variable(self, nn_prediction_tensor):
         self.check_input_shape(nn_prediction_tensor)
@@ -439,13 +445,15 @@ class MultivariateNormalTriLOutputLayer(RandomVariableOutputLayer):
 
     def loss_function(self, y_true, y_pred):
         loss = - self.log_likelihood(y_true, y_pred)
-        loss = tf.reshape(loss, [-1])
+        # loss = tf.reshape(loss, [-1])
+        loss = tf.math.reduce_mean(loss)
         return loss
 
     def log_likelihood(self, y_true, y_pred):
         return self.get_random_variable(y_pred).log_prob(y_true)
 
 
+@MIXTURE_COMPONENTS_REGISTRY.register('log_normal_tril')
 class MultivariateLogNormalTriLOutputLayer(MultivariateNormalTriLOutputLayer):
 
     def get_random_variable(self, nn_prediction_tensor):
@@ -496,11 +504,13 @@ class MixtureOutputLayer(RandomVariableOutputLayer):
         sample_space_dims = [component.sample_space_dimension for component in self.components]
 
         if not all(x == sample_space_dims[0] for x in sample_space_dims):
-            raise DimensionError(f"The random variables which have been passed "
-                                 f"as mixture components sample from spaces with "
-                                 f"different dimensions.\n"
-                                 f"This is the list of sample spaces dimensions:\n"
-                                 f"{sample_space_dims}")
+            raise DimensionError(
+                f"The random variables which have been passed "
+                f"as mixture components sample from spaces with "
+                f"different dimensions.\n"
+                f"This is the list of sample spaces dimensions:\n"
+                f"{sample_space_dims}"
+            )
 
         self._sample_space_dimension = sample_space_dims[0]
 
@@ -509,12 +519,48 @@ class MixtureOutputLayer(RandomVariableOutputLayer):
         for component in self.components:
             self._number_of_output_neurons += component.number_of_output_neurons
 
+    # def add_layer_on_top(self, base_model):
+    #     with tf.variable_scope(self.name_scope):
+    #         categorical_layer = self.categorical.add_layer_on_top(base_model)
+    #         components_layers = [component.add_layer_on_top(base_model) for component in self.components]
+    #         mixture_layers = [categorical_layer] + components_layers
+    #         return tf.keras.layers.Concatenate(axis=-1)(mixture_layers)
+
     def add_layer_on_top(self, base_model):
-        # TODO: split to slice for each component?
-        categorical_layer = self.categorical.add_layer_on_top(base_model)
-        components_layers = [component.add_layer_on_top(base_model) for component in self.components]
-        mixture_layers = [categorical_layer] + components_layers
-        return tf.keras.layers.Concatenate(axis=-1)(mixture_layers)
+        # split to slice for each component
+        n_slices = len(self.components) + 1
+        slice_dim = base_model.shape.as_list()[-1]
+        slice_size = slice_dim // n_slices
+        cat_slice_size = slice_size + slice_dim % n_slices
+
+        print(f'base shape: {base_model.shape}')
+
+        components_outputs = []
+
+        with tf.variable_scope(self.name_scope):
+
+            for i, component in enumerate(self.components):
+                component_slice = tf.slice(
+                    base_model,
+                    [0, i * slice_size],
+                    [-1, slice_size],
+                )
+                print(f'component {i}: from {i * slice_size}'
+                      f' for {slice_size} - {component_slice.shape.as_list()}')
+                component_output = component.add_layer_on_top(component_slice)
+                components_outputs.append(component_output)
+
+            categorical_slice = tf.slice(
+                    base_model,
+                    [0, (n_slices - 1) * slice_size],
+                    [-1, cat_slice_size],
+                )
+            print(f'categorical {i}: from {(n_slices - 1) * slice_size}'
+                  f' for {cat_slice_size} - {categorical_slice.shape.as_list()}')
+            categorical_output = self.categorical.add_layer_on_top(categorical_slice)
+
+            mixture_outputs = [categorical_output] + components_outputs
+            return tf.keras.layers.Concatenate(axis=-1)(mixture_outputs)
 
     def get_random_variable(self, nn_prediction_tensor):
         self.check_input_shape(nn_prediction_tensor)
@@ -542,7 +588,8 @@ class MixtureOutputLayer(RandomVariableOutputLayer):
 
     def loss_function(self, y_true, y_pred):
         loss = - self.log_likelihood(y_true, y_pred)
-        loss = tf.reshape(loss, [-1])
+        # loss = tf.reshape(loss, [-1])
+        loss = tf.math.reduce_mean(loss)
         return loss
 
     def log_likelihood(self, y_true, y_pred):

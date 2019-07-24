@@ -441,8 +441,7 @@ class BaseDataset(metaclass=abc.ABCMeta):
             shuffle_buffer_size=100,
     ):
         self._batch_size = batch_size
-        if prefetch_size is None:
-            self._prefetch_size = -1
+        self._prefetch_size = prefetch_size or -1
 
         self._shuffle = shuffle
         self._shuffle_buffer_size = shuffle_buffer_size
@@ -456,11 +455,11 @@ class BaseDataset(metaclass=abc.ABCMeta):
         return self._prefetch_size
 
     def __iter__(self):
-        config = tf.ConfigProto(device_count={'GPU': 0})
+        config = tf.compat.v1.ConfigProto(device_count={'GPU': 0})
         graph = tf.Graph()
         dataset = self.create_dataset(graph)
-        with tf.Session(graph=graph, config=config) as session:
-            dataset_iter = dataset.make_one_shot_iterator()
+        with tf.compat.v1.Session(graph=graph, config=config) as session:
+            dataset_iter = tf.compat.v1.data.make_one_shot_iterator(dataset)
             next_element = dataset_iter.get_next()
             while True:
                 try:
@@ -472,15 +471,22 @@ class BaseDataset(metaclass=abc.ABCMeta):
     def _create_dataset(self):
         pass
 
-    def create_dataset(self, graph):
-        with graph.as_default():
+    def create_dataset(self, graph=None):
+        if graph is not None:
+            with graph.as_default():
+                dataset = self._create_dataset()
+                if self._shuffle is True:
+                    dataset = dataset.shuffle(buffer_size=self._shuffle_buffer_size)
+                dataset = dataset.batch(self._batch_size, drop_remainder=True)
+                dataset = dataset.prefetch(self._prefetch_size)
+        else:
             dataset = self._create_dataset()
             if self._shuffle is True:
                 dataset = dataset.shuffle(buffer_size=self._shuffle_buffer_size)
-            dataset = dataset.batch(self._batch_size)
+            dataset = dataset.batch(self._batch_size, drop_remainder=True)
             dataset = dataset.prefetch(self._prefetch_size)
 
-            return dataset
+        return dataset
 
 
 class TFRecordsDataset(BaseDataset):
