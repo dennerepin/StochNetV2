@@ -5,7 +5,7 @@ import logging
 import os
 import pickle
 from collections import namedtuple
-
+from time import time
 
 from stochnet_v2.dataset.dataset import TFRecordsDataset
 from stochnet_v2.static_classes.top_layers import MixtureOutputLayer
@@ -16,6 +16,7 @@ from stochnet_v2.utils.file_organisation import ProjectFileExplorer
 from stochnet_v2.utils.util import maybe_create_dir
 from stochnet_v2.utils.util import copy_graph
 from stochnet_v2.utils.util import get_transformed_tensor
+from stochnet_v2.utils.errors import NotRestoredVariables
 
 
 LOGGER = logging.getLogger('static_classes.model')
@@ -98,19 +99,22 @@ class StochNet:
             body_fn,
             mixture_config_path,
             project_folder,
-            model_id=None
+            model_id=None,
+            ckpt_path=None,
     ):
         self.nb_past_timesteps = nb_past_timesteps
         self.nb_features = nb_features
+        self.timestep = timestep
 
         self.project_explorer = ProjectFileExplorer(project_folder)
-        self.dataset_explorer = self.project_explorer.get_dataset_file_explorer(timestep, dataset_id)
-        self.model_explorer = self.project_explorer.get_model_file_explorer(timestep, model_id or dataset_id)
+        self.dataset_explorer = self.project_explorer.get_dataset_file_explorer(self.timestep, dataset_id)
+        self.model_explorer = self.project_explorer.get_model_file_explorer(self.timestep, model_id or dataset_id)
         self.variables_checkpoint_path = None
 
         self.graph = tf.compat.v1.Graph()
 
         with self.graph.as_default():
+            self.session = tf.Session()
             self.input_ph = tf.compat.v1.placeholder(tf.float32, (None, self.nb_past_timesteps, self.nb_features))
             self.rv_output_ph = tf.compat.v1.placeholder(tf.float32, (None, self.nb_features))
             self.body = body_fn(self.input_ph)
@@ -122,6 +126,11 @@ class StochNet:
         LOGGER.info(f'loss shape: {self.loss.shape}')
 
         self.scaler = self.load_scaler()
+
+        self.restored = False
+
+        if ckpt_path:
+            self.restore_from_checkpoint(ckpt_path)
 
     def get_dataset(
             self,
@@ -143,6 +152,20 @@ class StochNet:
         with open(self.dataset_explorer.scaler_fp, 'rb') as file:
             scaler = pickle.load(file)
         return scaler
+
+    def rescale(self, values):
+        #TODO
+        if values.ndim != 2:
+            shape = values.shape
+            values = values.reshape((shape[0], -1))
+            values = self.scaler.transform(values)
+            values = values.reshape(shape)
+        else:
+            values = self.scaler.transform(values)
+        return values
+
+    def scale_back(self, values):
+        return self.scaler.inverse_transform(values)
 
     def train(
             self,
@@ -388,10 +411,125 @@ class StochNet:
 
             LOGGER.info(f'minimal loss value = {best_loss}')
 
-        best_loss_checkpoints_saver.restore(
-            session,
-            get_best_checkpoint_path(best_loss_step)
-        )
+        # best_loss_checkpoints_saver.restore(
+        #     session,
+        #     get_best_checkpoint_path(best_loss_step)
+        # )
         best_checkpoint_path = get_best_checkpoint_path(best_loss_step)
 
         return best_checkpoint_path
+
+    def restore_from_checkpoint(self, ckpt_path):
+        with self.graph.as_default():
+            variables = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES)
+            saver = tf.compat.v1.train.Saver(var_list=variables)
+            saver.restore(self.session, ckpt_path)
+        self.restored = True
+
+    def predict(self, curr_state_values):
+
+        if not self.restored:
+            raise NotRestoredVariables()
+
+        prediction_values = self.session.run(
+            self.nn_output,
+            feed_dict={
+                self.input_ph: curr_state_values
+            }
+        )
+        return prediction_values
+
+    def sample(self, prediction_values, sample_shape=()):
+        sample = self.top_layer_obj.sample_fast(
+            prediction_values,
+            session=self.session,
+            sample_shape=sample_shape,
+        )
+        sample = np.expand_dims(sample, -2)
+        return sample
+
+    def next_state(
+            self,
+            curr_state_values,
+            curr_state_rescaled=False,
+            scale_back_result=True,
+            round_result=False,
+            n_samples=1,
+    ):
+
+        if not curr_state_rescaled:
+            curr_state_values = self.rescale(curr_state_values)
+
+        nn_prediction_values = self.predict(curr_state_values)
+
+        next_state = self.sample(nn_prediction_values, sample_shape=(n_samples,))
+
+        if scale_back_result:
+            next_state = self.scale_back(next_state)
+            if round_result:
+                next_state = np.around(next_state)
+
+        # [n_samples, batch_size, 1, nb_features]
+        return next_state
+
+    def generate_traces(
+            self,
+            curr_state_values,
+            n_steps,
+            n_traces=1,
+            curr_state_rescaled=False,
+            scale_back_result=True,
+            round_result=False,
+            add_timesteps=False,
+    ):
+        batch_size, *state_shape = curr_state_values.shape
+        traces = np.zeros((n_steps + 1, n_traces, batch_size, *state_shape))
+
+        if not curr_state_rescaled:
+            curr_state_values = self.rescale(curr_state_values)
+
+        traces[0] = curr_state_values
+
+        next_state_values = self.next_state(
+                curr_state_values,
+                curr_state_rescaled=True,
+                scale_back_result=False,
+                round_result=False,
+                n_samples=n_traces,
+            )
+        traces[1] = next_state_values
+
+        for step in range(2, n_steps + 1):
+            next_state_values = next_state_values.reshape((-1, *state_shape))
+            next_state_values = self.next_state(
+                next_state_values,
+                curr_state_rescaled=True,
+                scale_back_result=False,
+                round_result=False,
+                n_samples=1,
+            )
+            next_state_values = next_state_values.reshape((-1, batch_size, *state_shape))
+            traces[step] = next_state_values
+
+        traces = np.squeeze(traces, axis=-2)
+
+        if scale_back_result:
+            traces = self.scale_back(traces)
+            if round_result:
+                traces = np.around(traces)
+
+        # [n_steps, n_traces, batch_size, 1, nb_features]
+        traces = np.transpose(traces, (2, 1, 0, 3))
+
+        if add_timesteps:
+            timespan = np.arange(0, (n_steps + 1) * self.timestep, self.timestep)
+            timespan = np.tile(timespan, reps=(batch_size, n_traces, 1))
+            timespan = timespan[..., np.newaxis]
+            traces = np.concatenate([timespan, traces], axis=-1)
+
+        # [batch_size, n_traces, n_steps, 1, nb_features]
+        return traces
+
+
+
+

@@ -18,3 +18,14 @@ class DimensionError(Exception):
 
     def __init__(self, message='Wrong dimensions!'):
         self.message = message
+
+
+class NotRestoredVariables(Exception):
+    """Exception raised when trying to use model without loading trained variables.
+
+    Attributes:
+        message -- explanation of the error
+    """
+
+    def __init__(self, message='Model variables not restored!'):
+        self.message = message
