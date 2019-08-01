@@ -475,9 +475,11 @@ class BaseDataset(metaclass=abc.ABCMeta):
         if graph is not None:
             with graph.as_default():
                 dataset = self._create_dataset()
+                # if self._shuffle is True:
+                #     dataset = dataset.shuffle(buffer_size=self._shuffle_buffer_size)
+                dataset = dataset.batch(self._batch_size, drop_remainder=True)
                 if self._shuffle is True:
                     dataset = dataset.shuffle(buffer_size=self._shuffle_buffer_size)
-                dataset = dataset.batch(self._batch_size, drop_remainder=True)
                 dataset = dataset.prefetch(self._prefetch_size)
         else:
             dataset = self._create_dataset()

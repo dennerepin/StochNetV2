@@ -1,3 +1,4 @@
+import numpy as np
 import os
 import shutil
 import tensorflow as tf
@@ -24,3 +25,14 @@ def get_transformed_tensor(src_tensor, dst_graph, dst_scope=''):
         dst_tensor_name = f'{dst_scope}/{dst_tensor_name}'
 
     return dst_graph.get_tensor_by_name(dst_tensor_name)
+
+
+def count_parameters(model):
+    with model.graph.as_default():
+        trainable_vars = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES)
+    return np.sum([np.prod(v.shape.as_list()) for v in trainable_vars])
+
+
+def count_dense_flop(layer, x):
+    return (x.shape.as_list()[-1] + 1) * layer.units
+

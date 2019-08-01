@@ -7,16 +7,17 @@ from collections import namedtuple
 
 from stochnet_v2.static_classes.top_layers import MixtureOutputLayer
 from stochnet_v2.static_classes.top_layers import MIXTURE_COMPONENTS_REGISTRY
-from stochnet_v2.static_classes.top_layers import KERNEL_CONSTRAINTS_REGISTRY
-from stochnet_v2.static_classes.top_layers import REGULARIZERS_REGISTRY
 from stochnet_v2.utils.file_organisation import ProjectFileExplorer
 from stochnet_v2.utils.errors import NotRestoredVariables
+from stochnet_v2.utils.registry import ACTIVATIONS_REGISTRY
+from stochnet_v2.utils.registry import KERNEL_CONSTRAINTS_REGISTRY
+from stochnet_v2.utils.registry import REGULARIZERS_REGISTRY
 
 
 LOGGER = logging.getLogger('static_classes.model')
 
 
-Description = namedtuple('ComponentDescription', ['name', 'parameters'])
+ComponentDescription = namedtuple('ComponentDescription', ['name', 'parameters'])
 
 
 def _get_mixture(config_path, sample_space_dimension):
@@ -24,23 +25,39 @@ def _get_mixture(config_path, sample_space_dimension):
     with open(config_path, 'r') as f:
         top_layer_conf = json.load(f)
 
-    descriptions = [Description(name, params) for (name, params) in top_layer_conf]
-
+    categorical = None
     components = []
+    descriptions = [ComponentDescription(name, params) for (name, params) in top_layer_conf]
+
     for description in descriptions:
-        component_class = MIXTURE_COMPONENTS_REGISTRY[description.name]
 
         kwargs = {}
+        component_class = MIXTURE_COMPONENTS_REGISTRY[description.name]
+
         for key, val in description.parameters.items():
+            if 'activation' in key:
+                kwargs[key] = ACTIVATIONS_REGISTRY[val]
+            if 'constraint' in key:
+                kwargs[key] = KERNEL_CONSTRAINTS_REGISTRY[val]
+            if 'hidden_size' in key:
+                kwargs[key] = int(val) if val != 'none' else None
             if 'regularizer' in key:
                 kwargs[key] = REGULARIZERS_REGISTRY[val]
-            elif 'constraint' in key:
-                kwargs[key] = KERNEL_CONSTRAINTS_REGISTRY[val]
 
-        component = component_class(sample_space_dimension=sample_space_dimension, **kwargs)
-        components.append(component)
+        if description.name == 'categorical':
+            categorical = component_class(number_of_classes=len(descriptions) - 1, **kwargs)
+        else:
+            component = component_class(sample_space_dimension=sample_space_dimension, **kwargs)
+            components.append(component)
 
-    return MixtureOutputLayer(components)
+    if categorical is None:
+        LOGGER.warning(
+            "Couldn't find description for Categorical random variable, "
+            "will initialize it with default parameters"
+        )
+        categorical = MIXTURE_COMPONENTS_REGISTRY['categorical'](number_of_classes=len(descriptions))
+
+    return MixtureOutputLayer(categorical, components)
 
 
 class StochNet:
@@ -93,7 +110,7 @@ class StochNet:
         return scaler
 
     def rescale(self, values):
-        #TODO?
+        #TODO rewrite?
         if values.ndim != 2:
             shape = values.shape
             values = values.reshape((shape[0], -1))
@@ -196,6 +213,7 @@ class StochNet:
                 n_samples=1,
             )
             next_state_values = next_state_values.reshape((-1, batch_size, *state_shape))
+            # next_state_values = np.maximum(0, next_state_values)
             traces[step] = next_state_values
 
         # [n_steps, n_traces, batch_size, 1, nb_features] -> [n_steps, n_traces, batch_size, nb_features]

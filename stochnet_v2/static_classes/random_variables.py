@@ -116,10 +116,9 @@ class MultivariateNormalTriL:
     def __init__(
             self,
             mu,
-            tril_flat,
+            tril,
             validate_args=False
     ):
-        tril = tfd.fill_triangular(tril_flat)
         self.distribution_obj = tfd.MultivariateNormalTriL(
             loc=mu,
             scale_tril=tril,

@@ -3,6 +3,7 @@ import tensorflow as tf
 import logging
 import os
 from collections import namedtuple
+from time import time
 
 from stochnet_v2.dataset.dataset import TFRecordsDataset
 from stochnet_v2.utils.util import maybe_create_dir
@@ -10,18 +11,6 @@ from stochnet_v2.utils.util import copy_graph
 from stochnet_v2.utils.util import get_transformed_tensor
 
 LOGGER = logging.getLogger('static_classes.trainer')
-
-
-LearningStrategy = namedtuple(
-    'LearningStrategy',
-    [
-        'optimizer_type',
-        'initial_lr',
-        'lr_decay',
-        'lr_cos_steps',
-        'lr_cos_phase',
-    ],
-)
 
 
 TrainOperations = namedtuple(
@@ -33,22 +22,51 @@ TrainOperations = namedtuple(
     ],
 )
 
+ExpDecayLearningStrategy = namedtuple(
+    'ExpDecayLearningStrategy',
+    [
+        'optimizer_type',
+        'initial_lr',
+        'lr_decay',
+        'lr_cos_steps',
+        'lr_cos_phase',
+    ],
+)
 
-_MINIMAL_LEARNING_RATE = 10 ** -7
-_NUMBER_OF_REGULAR_CHECKPOINTS = 5
-_NUMBER_OF_BEST_LOSS_CHECKPOINTS = 2
+
+ToleranceDropLearningStrategy = namedtuple(
+    'ToleranceDropLearningStrategy',
+    [
+        'optimizer_type',
+        'initial_lr',
+        'lr_decay',
+        'epochs_tolerance',
+    ],
+)
+
+
+_MINIMAL_LEARNING_RATE = 10 ** - 6
+_NUMBER_OF_REGULAR_CHECKPOINTS = 10
+_NUMBER_OF_BEST_LOSS_CHECKPOINTS = 4
 _REGULAR_CHECKPOINTS_DELTA = 500
 _DEFAULT_NUMBER_OF_EPOCHS = 20
 _DEFAULT_BATCH_SIZE = 1024
 _DEFAULT_PREFETCH_SIZE = 10
 _DEFAULT_MOMENTUM = 0.9
-_DEFAULT_LEARNING_STRATEGY = LearningStrategy(
+
+_DEFAULT_LEARNING_STRATEGY = ExpDecayLearningStrategy(
     optimizer_type='adam',
     initial_lr=1e-4,
-    lr_decay=5e-5,
-    lr_cos_steps=5000,
+    lr_decay=6e-5,
+    lr_cos_steps=None,
     lr_cos_phase=np.pi / 2,
 )
+# _DEFAULT_LEARNING_STRATEGY = ToleranceDropLearningStrategy(
+#     optimizer_type='adam',
+#     initial_lr=1e-4,
+#     lr_decay=0.5,
+#     epochs_tolerance=5,
+# )
 
 
 class Trainer:
@@ -60,6 +78,7 @@ class Trainer:
             learning_strategy=None,
             batch_size=_DEFAULT_BATCH_SIZE,
             n_epochs=_DEFAULT_NUMBER_OF_EPOCHS,
+            ckpt_path=None,
     ):
         save_dir = save_dir or model.model_explorer.model_folder
 
@@ -70,7 +89,13 @@ class Trainer:
             self._build_trainable_graph(model, learning_strategy)
 
         with tf.Session(graph=trainable_graph) as session:
-            session.run(tf.compat.v1.global_variables_initializer())
+
+            if ckpt_path is None:
+                session.run(tf.compat.v1.global_variables_initializer())
+            else:
+                saver = tf.compat.v1.train.Saver()
+                saver.restore(session, ckpt_path)
+
             best_loss_checkpoint_path = self._train(
                 model=model,
                 session=session,
@@ -121,7 +146,7 @@ class Trainer:
             return trainable_graph, train_operations, train_input_x, train_input_y
 
     @staticmethod
-    def _get_train_test_datasets(
+    def _get_datasets(
             model,
             batch_size,
             kind='tfrecord'
@@ -193,14 +218,27 @@ class Trainer:
         test_mean_loss_ph = tf.compat.v1.placeholder(tf.float32, ())
         test_loss_summary = tf.compat.v1.summary.scalar('test_mean_loss', test_mean_loss_ph)
 
+        layer_params = {
+            var.name.split(':')[0]: var
+            for var in trainable_vars
+            if any([sub in var.name for sub in {'kernel', 'bias'}])
+        }
+
+        histogram_summaries = []
+        for name, var in layer_params.items():
+            summary = tf.compat.v1.summary.histogram(name, var)
+            histogram_summaries.append(summary)
+
         initial_learning_rate = session.run(train_operations.learning_rate)
         next_learning_rate = initial_learning_rate
 
         train_step = 0
         decay_step = 0
+        tolerance_step = 0
         nans_step_counter = 0
 
         best_loss = float('inf')
+        tolerance_best_loss = float('inf')
         best_loss_step = 0
 
         def reset_optimizer():
@@ -213,7 +251,7 @@ class Trainer:
         def get_best_checkpoint_path(step):
             return os.path.join(checkpoints_save_dir, f'best_ckpt_{step}')
 
-        train_dataset, test_dataset = self._get_train_test_datasets(
+        train_dataset, test_dataset = self._get_datasets(
             model,
             batch_size=batch_size,
             kind='tfrecord',
@@ -227,6 +265,9 @@ class Trainer:
         LOGGER.info('Training...')
 
         for epoch in range(n_epochs):
+
+            epoch_start_time = time()
+            epoch_start_step = train_step
 
             LOGGER.info(f'Epoch: {epoch + 1}')
 
@@ -246,12 +287,14 @@ class Trainer:
 
                 result = session.run(fetches=fetches, feed_dict=feed_dict)
 
-                next_learning_rate = initial_learning_rate.copy()
-                next_learning_rate *= np.exp(-train_step * learning_strategy.lr_decay)
-                next_learning_rate *= np.abs(
-                    np.cos(learning_strategy.lr_cos_phase * decay_step / learning_strategy.lr_cos_steps)
-                )
-                next_learning_rate += _MINIMAL_LEARNING_RATE
+                if isinstance(learning_strategy, ExpDecayLearningStrategy):
+                    next_learning_rate = initial_learning_rate.copy()
+                    next_learning_rate *= np.exp(-train_step * learning_strategy.lr_decay)
+                    if learning_strategy.lr_cos_steps is not None:
+                        next_learning_rate *= np.abs(
+                            np.cos(learning_strategy.lr_cos_phase * decay_step / learning_strategy.lr_cos_steps)
+                        )
+                    next_learning_rate += _MINIMAL_LEARNING_RATE
 
                 summary_writer.add_summary(result['learning_rate_summary'], train_step)
                 summary_writer.add_summary(result['loss_summary'], train_step)
@@ -271,10 +314,22 @@ class Trainer:
                         LOGGER.info(f'checkpoint_step is 0, reinitialize all variables...')
                         session.run(tf.compat.v1.variables_initializer(global_vars))
                     else:
-                        regular_checkpoints_saver.restore(
-                            session,
-                            get_regular_checkpoint_path(checkpoint_step)
-                        )
+                        try:
+                            regular_checkpoints_saver.restore(
+                                session,
+                                get_regular_checkpoint_path(checkpoint_step)
+                            )
+                        except ValueError:
+                            LOGGER.info(
+                                f'Checkpoint for step {checkpoint_step} not found, '
+                                f'will restore from the oldest existing checkpoint...'
+                            )
+                            ckpt_state = tf.compat.v1.train.get_checkpoint_state(checkpoints_save_dir)
+                            oldest_ckpt_path = ckpt_state.all_model_checkpoint_paths[0]
+                            regular_checkpoints_saver.restore(
+                                session,
+                                oldest_ckpt_path
+                            )
                         reset_optimizer()
                     continue
 
@@ -292,11 +347,36 @@ class Trainer:
                 train_step += 1
                 decay_step += 1
 
-                if train_step % learning_strategy.lr_cos_steps == 0:
-                    LOGGER.info('Reinitialize optimizer...')
-                    reset_optimizer()
-                    decay_step = 0
+                if isinstance(learning_strategy, ExpDecayLearningStrategy):
+                    if (learning_strategy.lr_cos_steps is not None) \
+                            and (train_step % learning_strategy.lr_cos_steps == 0):
+                        LOGGER.info('Reinitialize optimizer...')
+                        reset_optimizer()
+                        decay_step = 0
 
+            if isinstance(learning_strategy, ToleranceDropLearningStrategy):
+                if best_loss < tolerance_best_loss:
+                    tolerance_best_loss = best_loss
+                    tolerance_step = 0
+                else:
+                    tolerance_step += 1
+
+                if tolerance_step >= learning_strategy.epochs_tolerance:
+                    next_learning_rate = np.maximum(
+                        _MINIMAL_LEARNING_RATE,
+                        next_learning_rate * learning_strategy.lr_decay
+                    )
+
+            # HISTOGRAMS
+            for histogram_summary in histogram_summaries:
+                histogram_summary_val = session.run(histogram_summary)
+                summary_writer.add_summary(histogram_summary_val, epoch)
+
+            epoch_time = time() - epoch_start_time
+            epoch_steps = train_step - epoch_start_step
+            avg_step_time = epoch_time / epoch_steps
+
+            # TEST
             test_losses = []
 
             for X_test, Y_test in test_dataset:
@@ -319,7 +399,8 @@ class Trainer:
             )
             summary_writer.add_summary(test_loss_summary_val, epoch)
 
-            LOGGER.info(f'minimal loss value = {best_loss}')
+            LOGGER.info(f' = Minimal loss value = {best_loss},\n'
+                        f' - {epoch_steps} steps took {epoch_time:.0f} seconds, avg_step_time={avg_step_time:.3f}\n')
 
         best_checkpoint_path = get_best_checkpoint_path(best_loss_step)
 
