@@ -190,6 +190,8 @@ class CategoricalOutputLayer(RandomVariableOutputLayer):
             coeff_regularizer=None,
             kernel_constraint=None,
             kernel_regularizer=None,
+            bias_constraint=None,
+            bias_regularizer=None,
     ):
         super().__init__()
         self.number_of_classes = number_of_classes
@@ -200,6 +202,8 @@ class CategoricalOutputLayer(RandomVariableOutputLayer):
         self._layer_params = {
             'kernel_constraint': kernel_constraint,
             'kernel_regularizer': kernel_regularizer,
+            'bias_constraint': bias_constraint,
+            'bias_regularizer': bias_regularizer,
             'activity_regularizer': coeff_regularizer
         }
 
@@ -269,6 +273,8 @@ class MultivariateNormalDiagOutputLayer(RandomVariableOutputLayer):
             diag_regularizer=None,
             kernel_constraint=None,
             kernel_regularizer=None,
+            bias_constraint=None,
+            bias_regularizer=None,
     ):
         super().__init__()
         self.sample_space_dimension = sample_space_dimension
@@ -278,11 +284,15 @@ class MultivariateNormalDiagOutputLayer(RandomVariableOutputLayer):
         self._mu_layer_params = {
             'kernel_constraint': kernel_constraint,
             'kernel_regularizer': kernel_regularizer,
+            'bias_constraint': bias_constraint,
+            'bias_regularizer': bias_regularizer,
             'activity_regularizer': mu_regularizer,
         }
         self._diag_layer_params = {
             'kernel_constraint': kernel_constraint,
             'kernel_regularizer': kernel_regularizer,
+            'bias_constraint': bias_constraint,
+            'bias_regularizer': bias_regularizer,
             'activity_regularizer': diag_regularizer,
         }
 
@@ -378,6 +388,8 @@ class MultivariateNormalDiagOutputLayer(RandomVariableOutputLayer):
 @MIXTURE_COMPONENTS_REGISTRY.register('normal_tril')
 class MultivariateNormalTriLOutputLayer(RandomVariableOutputLayer):
 
+    random_variable_class = MultivariateNormalTriL
+
     def __init__(
             self,
             sample_space_dimension,
@@ -388,6 +400,8 @@ class MultivariateNormalTriLOutputLayer(RandomVariableOutputLayer):
             sub_diag_regularizer=None,
             kernel_constraint=None,
             kernel_regularizer=None,
+            bias_constraint=None,
+            bias_regularizer=None,
     ):
         super().__init__()
         self.sample_space_dimension = sample_space_dimension
@@ -397,16 +411,22 @@ class MultivariateNormalTriLOutputLayer(RandomVariableOutputLayer):
         self._mu_layer_params = {
             'kernel_constraint': kernel_constraint,
             'kernel_regularizer': kernel_regularizer,
+            'bias_constraint': bias_constraint,
+            'bias_regularizer': bias_regularizer,
             'activity_regularizer': mu_regularizer,
         }
         self._diag_layer_params = {
             'kernel_constraint': kernel_constraint,
             'kernel_regularizer': kernel_regularizer,
+            'bias_constraint': bias_constraint,
+            'bias_regularizer': bias_regularizer,
             'activity_regularizer': diag_regularizer,
         }
         self._sub_diag_layer_params = {
             'kernel_constraint': kernel_constraint,
             'kernel_regularizer': kernel_regularizer,
+            'bias_constraint': bias_constraint,
+            'bias_regularizer': bias_regularizer,
             'activity_regularizer': sub_diag_regularizer,
         }
 
@@ -526,7 +546,8 @@ class MultivariateNormalTriLOutputLayer(RandomVariableOutputLayer):
         with tf.control_dependencies([tf.assert_positive(diag)]):
             tril = _batch_to_tril(diag, sub_diag)
 
-        return MultivariateNormalTriL(mu, tril)
+        # return MultivariateNormalTriL(mu, tril)
+        return self.random_variable_class(mu, tril)
 
     def loss_function(self, y_true, y_pred):
         loss = - self.log_likelihood(y_true, y_pred)
@@ -541,29 +562,7 @@ class MultivariateNormalTriLOutputLayer(RandomVariableOutputLayer):
 @MIXTURE_COMPONENTS_REGISTRY.register('log_normal_tril')
 class MultivariateLogNormalTriLOutputLayer(MultivariateNormalTriLOutputLayer):
 
-    def get_random_variable(self, nn_prediction_tensor):
-        self.check_input_shape(nn_prediction_tensor)
-        mu = tf.slice(
-            nn_prediction_tensor,
-            [0, 0],
-            [-1, self._sample_space_dimension],
-            name='mu',
-        )
-        diag = tf.slice(
-            nn_prediction_tensor,
-            [0, self._sample_space_dimension],
-            [-1, self._sample_space_dimension],
-            name='diag',
-        )
-        sub_diag = tf.slice(
-            nn_prediction_tensor,
-            [0, 2 * self._sample_space_dimension],
-            [-1, self._number_of_sub_diag_entries],
-            name='sub_diag',
-        )
-        with tf.control_dependencies([tf.assert_positive(diag)]):
-            flat_tril = tf.concat([diag, sub_diag], axis=-1)
-        return MultivariateLogNormalTriL(mu, flat_tril)
+    random_variable_class = MultivariateLogNormalTriL
 
 
 class MixtureOutputLayer(RandomVariableOutputLayer):
@@ -607,15 +606,15 @@ class MixtureOutputLayer(RandomVariableOutputLayer):
         for component in self.components:
             self._number_of_output_neurons += component.number_of_output_neurons
 
-    def add_layer_on_top(self, base):
+    def add_layer_on_top_(self, base):
         with tf.variable_scope(self.name_scope):
             categorical_layer = self.categorical.add_layer_on_top(base)
             components_layers = [component.add_layer_on_top(base) for component in self.components]
             mixture_layers = [categorical_layer] + components_layers
             return tf.keras.layers.Concatenate(axis=-1)(mixture_layers)
 
-    def add_layer_on_top_split(self, base):
-        # split to slice for each component
+    def add_layer_on_top(self, base):
+        # individual slice for each component
         n_slices = len(self.components) + 1
         slice_dim = base.shape.as_list()[-1]
         slice_size = slice_dim // n_slices
@@ -627,25 +626,25 @@ class MixtureOutputLayer(RandomVariableOutputLayer):
 
         with tf.variable_scope(self.name_scope):
 
+            categorical_slice = tf.slice(
+                base,
+                [0, 0],
+                [-1, cat_slice_size],
+            )
+            print(f'categorical: from {(n_slices - 1) * slice_size}'
+                  f' for {cat_slice_size} - {categorical_slice.shape.as_list()}')
+            categorical_output = self.categorical.add_layer_on_top(categorical_slice)
+
             for i, component in enumerate(self.components):
                 component_slice = tf.slice(
                     base,
-                    [0, i * slice_size],
+                    [0, cat_slice_size + i * slice_size],
                     [-1, slice_size],
                 )
                 print(f'component {i}: from {i * slice_size}'
                       f' for {slice_size} - {component_slice.shape.as_list()}')
                 component_output = component.add_layer_on_top(component_slice)
                 components_outputs.append(component_output)
-
-            categorical_slice = tf.slice(
-                    base,
-                    [0, (n_slices - 1) * slice_size],
-                    [-1, cat_slice_size],
-                )
-            print(f'categorical {i}: from {(n_slices - 1) * slice_size}'
-                  f' for {cat_slice_size} - {categorical_slice.shape.as_list()}')
-            categorical_output = self.categorical.add_layer_on_top(categorical_slice)
 
             mixture_outputs = [categorical_output] + components_outputs
             return tf.keras.layers.Concatenate(axis=-1)(mixture_outputs)

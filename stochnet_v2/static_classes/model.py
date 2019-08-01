@@ -10,7 +10,7 @@ from stochnet_v2.static_classes.top_layers import MIXTURE_COMPONENTS_REGISTRY
 from stochnet_v2.utils.file_organisation import ProjectFileExplorer
 from stochnet_v2.utils.errors import NotRestoredVariables
 from stochnet_v2.utils.registry import ACTIVATIONS_REGISTRY
-from stochnet_v2.utils.registry import KERNEL_CONSTRAINTS_REGISTRY
+from stochnet_v2.utils.registry import CONSTRAINTS_REGISTRY
 from stochnet_v2.utils.registry import REGULARIZERS_REGISTRY
 
 
@@ -37,10 +37,10 @@ def _get_mixture(config_path, sample_space_dimension):
         for key, val in description.parameters.items():
             if 'activation' in key:
                 kwargs[key] = ACTIVATIONS_REGISTRY[val]
-            if 'constraint' in key:
-                kwargs[key] = KERNEL_CONSTRAINTS_REGISTRY[val]
             if 'hidden_size' in key:
                 kwargs[key] = int(val) if val != 'none' else None
+            if 'constraint' in key:
+                kwargs[key] = CONSTRAINTS_REGISTRY[val]
             if 'regularizer' in key:
                 kwargs[key] = REGULARIZERS_REGISTRY[val]
 

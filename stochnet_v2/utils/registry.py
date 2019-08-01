@@ -57,14 +57,14 @@ class Registry(dict):
         return add_item
 
 
-KERNEL_CONSTRAINTS_REGISTRY = Registry(name='KernelConstraintsRegistry')
+CONSTRAINTS_REGISTRY = Registry(name='KernelConstraintsRegistry')
 REGULARIZERS_REGISTRY = Registry(name='RegularizersRegistry')
 ACTIVATIONS_REGISTRY = Registry(name='ActivationsRegistry')
 
-KERNEL_CONSTRAINTS_REGISTRY['maxnorm'] = tf.keras.constraints.MaxNorm(3)
-KERNEL_CONSTRAINTS_REGISTRY['minmaxnorm'] = tf.keras.constraints.MinMaxNorm(3)
-KERNEL_CONSTRAINTS_REGISTRY['unitnorm'] = tf.keras.constraints.UnitNorm(3)
-KERNEL_CONSTRAINTS_REGISTRY['none'] = None
+CONSTRAINTS_REGISTRY['maxnorm'] = tf.keras.constraints.MaxNorm(3)
+CONSTRAINTS_REGISTRY['minmaxnorm'] = tf.keras.constraints.MinMaxNorm(3)
+CONSTRAINTS_REGISTRY['unitnorm'] = tf.keras.constraints.UnitNorm(3)
+CONSTRAINTS_REGISTRY['none'] = None
 
 REGULARIZERS_REGISTRY['l1'] = tf.keras.regularizers.l1(0.01)
 REGULARIZERS_REGISTRY['l2'] = tf.keras.regularizers.l2(0.01)

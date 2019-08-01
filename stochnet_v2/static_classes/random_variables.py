@@ -259,8 +259,8 @@ class Mixture:
         self.components = list(components)
         self.number_of_components = len(components)
 
-        tf_cat = cat.distribution_obj
-        tf_components = [component.distribution_obj for component in components]
+        tf_cat = self.cat.distribution_obj
+        tf_components = [component.distribution_obj for component in self.components]
 
         self.distribution_obj = tfd.Mixture(
             cat=tf_cat,
@@ -275,7 +275,7 @@ class Mixture:
         return self.distribution_obj.sample(sample_shape=sample_shape)
 
     @property
-    def nb_of_indipendent_random_variables(self):
+    def nb_of_independent_random_variables(self):
         return np.array(self.distribution_obj.batch_shape).prod()
 
     def get_description(self):
@@ -284,7 +284,7 @@ class Mixture:
         cat_descriptions = self.cat.get_description()
         component_descriptions = [component.get_description() for component in self.components]
 
-        for j in range(self.nb_of_indipendent_random_variables):
+        for j in range(self.nb_of_independent_random_variables):
             description = description_preamble + cat_descriptions[j]
 
             for component_description in component_descriptions:

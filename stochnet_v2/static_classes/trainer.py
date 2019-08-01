@@ -45,28 +45,28 @@ ToleranceDropLearningStrategy = namedtuple(
 )
 
 
-_MINIMAL_LEARNING_RATE = 10 ** - 6
+_MINIMAL_LEARNING_RATE = 2 * 10 ** - 6
 _NUMBER_OF_REGULAR_CHECKPOINTS = 10
 _NUMBER_OF_BEST_LOSS_CHECKPOINTS = 4
-_REGULAR_CHECKPOINTS_DELTA = 500
-_DEFAULT_NUMBER_OF_EPOCHS = 20
+_REGULAR_CHECKPOINTS_DELTA = 2000
+_DEFAULT_NUMBER_OF_EPOCHS = 100
 _DEFAULT_BATCH_SIZE = 1024
 _DEFAULT_PREFETCH_SIZE = 10
 _DEFAULT_MOMENTUM = 0.9
 
-_DEFAULT_LEARNING_STRATEGY = ExpDecayLearningStrategy(
-    optimizer_type='adam',
-    initial_lr=1e-4,
-    lr_decay=6e-5,
-    lr_cos_steps=None,
-    lr_cos_phase=np.pi / 2,
-)
-# _DEFAULT_LEARNING_STRATEGY = ToleranceDropLearningStrategy(
+# _DEFAULT_LEARNING_STRATEGY = ExpDecayLearningStrategy(
 #     optimizer_type='adam',
 #     initial_lr=1e-4,
-#     lr_decay=0.5,
-#     epochs_tolerance=5,
+#     lr_decay=6e-5,
+#     lr_cos_steps=None,
+#     lr_cos_phase=np.pi / 2,
 # )
+_DEFAULT_LEARNING_STRATEGY = ToleranceDropLearningStrategy(
+    optimizer_type='adam',
+    initial_lr=1e-4,
+    lr_decay=0.5,
+    epochs_tolerance=5,
+)
 
 
 class Trainer:
