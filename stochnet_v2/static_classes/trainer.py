@@ -19,6 +19,8 @@ TrainOperations = namedtuple(
         'gradients',
         'learning_rate',
         'loss',
+        'global_step',
+        'increase_global_step',
     ],
 )
 
@@ -30,6 +32,7 @@ ExpDecayLearningStrategy = namedtuple(
         'lr_decay',
         'lr_cos_steps',
         'lr_cos_phase',
+        'minimal_lr',
     ],
 )
 
@@ -41,32 +44,36 @@ ToleranceDropLearningStrategy = namedtuple(
         'initial_lr',
         'lr_decay',
         'epochs_tolerance',
+        'minimal_lr',
     ],
 )
 
 
-_MINIMAL_LEARNING_RATE = 2 * 10 ** - 6
+_MINIMAL_LEARNING_RATE = 1 * 10 ** - 7
 _NUMBER_OF_REGULAR_CHECKPOINTS = 10
-_NUMBER_OF_BEST_LOSS_CHECKPOINTS = 4
-_REGULAR_CHECKPOINTS_DELTA = 2000
+_NUMBER_OF_BEST_LOSS_CHECKPOINTS = 5
+_REGULAR_CHECKPOINTS_DELTA = 1000
 _DEFAULT_NUMBER_OF_EPOCHS = 100
 _DEFAULT_BATCH_SIZE = 1024
 _DEFAULT_PREFETCH_SIZE = 10
 _DEFAULT_MOMENTUM = 0.9
 
-# _DEFAULT_LEARNING_STRATEGY = ExpDecayLearningStrategy(
-#     optimizer_type='adam',
-#     initial_lr=1e-4,
-#     lr_decay=6e-5,
-#     lr_cos_steps=None,
-#     lr_cos_phase=np.pi / 2,
-# )
-_DEFAULT_LEARNING_STRATEGY = ToleranceDropLearningStrategy(
+_DEFAULT_LEARNING_STRATEGY = ExpDecayLearningStrategy(
     optimizer_type='adam',
     initial_lr=1e-4,
-    lr_decay=0.5,
-    epochs_tolerance=5,
+    lr_decay=1e-4,
+    lr_cos_steps=None,
+    lr_cos_phase=np.pi / 2,
+    minimal_lr=1e-7,
 )
+
+# _DEFAULT_LEARNING_STRATEGY = ToleranceDropLearningStrategy(
+#     optimizer_type='adam',
+#     initial_lr=1e-4,
+#     lr_decay=0.6,
+#     epochs_tolerance=6,
+#     minimal_lr=1e-7,
+# )
 
 
 class Trainer:
@@ -93,8 +100,13 @@ class Trainer:
             if ckpt_path is None:
                 session.run(tf.compat.v1.global_variables_initializer())
             else:
-                saver = tf.compat.v1.train.Saver()
-                saver.restore(session, ckpt_path)
+                tf.compat.v1.train.Saver().restore(session, ckpt_path)
+
+            clear_train_dir = ckpt_path is None
+            tensorboard_log_dir = os.path.join(save_dir, 'tensorboard')
+            checkpoints_save_dir = os.path.join(save_dir, 'checkpoints')
+            maybe_create_dir(tensorboard_log_dir, erase_existing=clear_train_dir)
+            maybe_create_dir(checkpoints_save_dir, erase_existing=clear_train_dir)
 
             best_loss_checkpoint_path = self._train(
                 model=model,
@@ -105,7 +117,8 @@ class Trainer:
                 learning_strategy=learning_strategy,
                 n_epochs=n_epochs,
                 batch_size=batch_size,
-                save_dir=save_dir,
+                checkpoints_save_dir=checkpoints_save_dir,
+                tensorboard_log_dir=tensorboard_log_dir,
             )
             return best_loss_checkpoint_path
 
@@ -128,6 +141,9 @@ class Trainer:
                 name='learning_rate',
             )
 
+            global_step = tf.Variable(0, trainable=False, name='global_step')
+            increase_global_step = tf.assign_add(global_step, 1)
+
             optimizer_type = learning_strategy.optimizer_type.lower()
             if optimizer_type == 'adam':
                 optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate)
@@ -139,7 +155,13 @@ class Trainer:
             gradients = optimizer.compute_gradients(loss, var_list=tf.trainable_variables())
             gradients = optimizer.apply_gradients(gradients)
 
-            train_operations = TrainOperations(gradients, learning_rate, loss)
+            train_operations = TrainOperations(
+                gradients,
+                learning_rate,
+                loss,
+                global_step,
+                increase_global_step,
+            )
             train_input_x = model_input
             train_input_y = rv_output
 
@@ -185,24 +207,19 @@ class Trainer:
             learning_strategy,
             n_epochs,
             batch_size,
-            save_dir,
+            checkpoints_save_dir,
+            tensorboard_log_dir,
     ):
-        tensorboard_log_dir = os.path.join(save_dir, 'tensorboard')
-        checkpoints_save_dir = os.path.join(save_dir, 'checkpoints')
-        maybe_create_dir(tensorboard_log_dir, erase_existing=True)
-        maybe_create_dir(checkpoints_save_dir, erase_existing=True)
-
         global_vars = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.GLOBAL_VARIABLES)
         trainable_vars = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES)
-        optimizer_vars = list(set(global_vars) - set(trainable_vars))
+        optimizer_vars = list(set(global_vars) - set(trainable_vars) - {train_operations.global_step})
 
         LOGGER.info(f'Total number of trainable vars {len(trainable_vars)}')
         LOGGER.info(f'Total number of optimizer vars {len(optimizer_vars)}')
 
-        session.run(tf.compat.v1.global_variables_initializer())
-
         regular_checkpoints_saver = tf.compat.v1.train.Saver(
-            var_list=trainable_vars,
+            # var_list=trainable_vars,
+            var_list=global_vars,
             max_to_keep=_NUMBER_OF_REGULAR_CHECKPOINTS,
         )
         best_loss_checkpoints_saver = tf.compat.v1.train.Saver(
@@ -232,7 +249,7 @@ class Trainer:
         initial_learning_rate = session.run(train_operations.learning_rate)
         next_learning_rate = initial_learning_rate
 
-        train_step = 0
+        global_step = session.run(train_operations.global_step)
         decay_step = 0
         tolerance_step = 0
         nans_step_counter = 0
@@ -257,17 +274,14 @@ class Trainer:
             kind='tfrecord',
         )
 
-        regular_checkpoints_saver.save(
-            session,
-            get_regular_checkpoint_path(train_step)
-        )
+        regular_checkpoints_saver.save(session, get_regular_checkpoint_path(global_step))
 
         LOGGER.info('Training...')
 
         for epoch in range(n_epochs):
 
             epoch_start_time = time()
-            epoch_start_step = train_step
+            epoch_start_step = global_step
 
             LOGGER.info(f'Epoch: {epoch + 1}')
 
@@ -283,29 +297,34 @@ class Trainer:
                     'loss': train_operations.loss,
                     'learning_rate_summary': learning_rate_summary,
                     'loss_summary': train_loss_summary,
+                    'global_step': train_operations.global_step,
                 }
 
                 result = session.run(fetches=fetches, feed_dict=feed_dict)
 
-                if isinstance(learning_strategy, ExpDecayLearningStrategy):
+                global_step = result['global_step']
+
+                # drop lr for next step if train with exponential decay
+                if learning_strategy.__class__.__name__ == 'ExpDecayLearningStrategy':
                     next_learning_rate = initial_learning_rate.copy()
-                    next_learning_rate *= np.exp(-train_step * learning_strategy.lr_decay)
+                    next_learning_rate *= np.exp(-global_step * learning_strategy.lr_decay)
                     if learning_strategy.lr_cos_steps is not None:
                         next_learning_rate *= np.abs(
                             np.cos(learning_strategy.lr_cos_phase * decay_step / learning_strategy.lr_cos_steps)
                         )
-                    next_learning_rate += _MINIMAL_LEARNING_RATE
+                    next_learning_rate += learning_strategy.minimal_lr
 
-                summary_writer.add_summary(result['learning_rate_summary'], train_step)
-                summary_writer.add_summary(result['loss_summary'], train_step)
+                summary_writer.add_summary(result['learning_rate_summary'], global_step)
+                summary_writer.add_summary(result['loss_summary'], global_step)
 
+                # HANDLE NAN VALUES
                 has_nans = any([
                     np.isnan(result['loss']),
                 ])
                 if has_nans:
-                    LOGGER.warning(f'Loss is None on step {train_step}, restore previous checkpoint...')
+                    LOGGER.warning(f'Loss is None on step {global_step}, restore previous checkpoint...')
                     nans_step_counter += 1
-                    checkpoint_step = train_step // _REGULAR_CHECKPOINTS_DELTA
+                    checkpoint_step = global_step // _REGULAR_CHECKPOINTS_DELTA
                     checkpoint_step -= nans_step_counter
                     checkpoint_step = max(checkpoint_step, 0)
                     checkpoint_step *= _REGULAR_CHECKPOINTS_DELTA
@@ -333,28 +352,30 @@ class Trainer:
                         reset_optimizer()
                     continue
 
+                # save best checkpoint
                 if result['loss'] < best_loss:
-                    best_loss_checkpoints_saver.save(session, get_best_checkpoint_path(train_step))
-                    best_loss, best_loss_step = result['loss'], train_step
+                    best_loss_checkpoints_saver.save(session, get_best_checkpoint_path(global_step))
+                    best_loss, best_loss_step = result['loss'], global_step
 
-                if train_step % _REGULAR_CHECKPOINTS_DELTA == 0:
+                # save regular checkpoint
+                if global_step % _REGULAR_CHECKPOINTS_DELTA == 0:
                     nans_step_counter = 0
-                    regular_checkpoints_saver.save(
-                        session,
-                        get_regular_checkpoint_path(train_step)
-                    )
+                    regular_checkpoints_saver.save(session, get_regular_checkpoint_path(global_step))
 
-                train_step += 1
-                decay_step += 1
-
-                if isinstance(learning_strategy, ExpDecayLearningStrategy):
+                # reset optimizer parameters for next cosine phase
+                if learning_strategy.__class__.__name__ == 'ExpDecayLearningStrategy':
                     if (learning_strategy.lr_cos_steps is not None) \
-                            and (train_step % learning_strategy.lr_cos_steps == 0):
+                            and (global_step % learning_strategy.lr_cos_steps == 0 and global_step > 0):
                         LOGGER.info('Reinitialize optimizer...')
                         reset_optimizer()
                         decay_step = 0
 
-            if isinstance(learning_strategy, ToleranceDropLearningStrategy):
+                # increase global step
+                session.run(train_operations.increase_global_step)
+                decay_step += 1
+
+            # drop lr for next epoch if train with tolerance
+            if learning_strategy.__class__.__name__ == 'ToleranceDropLearningStrategy':
                 if best_loss < tolerance_best_loss:
                     tolerance_best_loss = best_loss
                     tolerance_step = 0
@@ -363,7 +384,7 @@ class Trainer:
 
                 if tolerance_step >= learning_strategy.epochs_tolerance:
                     next_learning_rate = np.maximum(
-                        _MINIMAL_LEARNING_RATE,
+                        learning_strategy.minimal_lr,
                         next_learning_rate * learning_strategy.lr_decay
                     )
 
@@ -373,7 +394,7 @@ class Trainer:
                 summary_writer.add_summary(histogram_summary_val, epoch)
 
             epoch_time = time() - epoch_start_time
-            epoch_steps = train_step - epoch_start_step
+            epoch_steps = global_step - epoch_start_step
             avg_step_time = epoch_time / epoch_steps
 
             # TEST

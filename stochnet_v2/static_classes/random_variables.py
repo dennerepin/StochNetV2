@@ -179,7 +179,6 @@ class MultivariateLogNormalTriL:
             tril,
             validate_args=False,
     ):
-        tril = tfd.fill_triangular(tril)
         self.distribution_obj = tfd.TransformedDistribution(
             distribution=tfd.MultivariateNormalTriL(
                 loc=mu,

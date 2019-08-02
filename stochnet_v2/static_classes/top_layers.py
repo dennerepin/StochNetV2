@@ -511,17 +511,23 @@ class MultivariateNormalTriLOutputLayer(RandomVariableOutputLayer):
 
     def get_random_variable(self, nn_prediction_tensor):
 
-        def _to_diag_matr(flat_diag):
-            return tf.diag(flat_diag)
+        # def _to_diag_matr(flat_diag):
+        #     return tf.diag(flat_diag)
+        # 
+        # def _to_sub_diag_matr(flat_sub_diag):
+        #     flat_sub_diag = tfd.fill_triangular(flat_sub_diag)
+        #     flat_sub_diag = tf.pad(flat_sub_diag, [[1, 0], [0, 1]])
+        #     return flat_sub_diag
 
-        def _to_sub_diag_matr(flat_sub_diag):
-            flat_sub_diag = tfd.fill_triangular(flat_sub_diag)
-            flat_sub_diag = tf.pad(flat_sub_diag, [[1, 0], [0, 1]])
-            return flat_sub_diag
+        # def _batch_to_tril(flat_diag, flat_sub_diag):
+        #     diag_matr = tf.map_fn(_to_diag_matr, flat_diag)
+        #     sub_diag_matr = tf.map_fn(_to_sub_diag_matr, flat_sub_diag)
+        #     return diag_matr + sub_diag_matr
 
         def _batch_to_tril(flat_diag, flat_sub_diag):
-            diag_matr = tf.map_fn(_to_diag_matr, flat_diag)
-            sub_diag_matr = tf.map_fn(_to_sub_diag_matr, flat_sub_diag)
+            diag_matr = tf.matrix_diag(flat_diag)
+            sub_diag_matr = tfd.fill_triangular(flat_sub_diag)
+            sub_diag_matr = tf.pad(sub_diag_matr, paddings=tf.constant([[0, 0], [1, 0], [0, 1]]))
             return diag_matr + sub_diag_matr
 
         self.check_input_shape(nn_prediction_tensor)
@@ -546,7 +552,6 @@ class MultivariateNormalTriLOutputLayer(RandomVariableOutputLayer):
         with tf.control_dependencies([tf.assert_positive(diag)]):
             tril = _batch_to_tril(diag, sub_diag)
 
-        # return MultivariateNormalTriL(mu, tril)
         return self.random_variable_class(mu, tril)
 
     def loss_function(self, y_true, y_pred):
@@ -631,8 +636,8 @@ class MixtureOutputLayer(RandomVariableOutputLayer):
                 [0, 0],
                 [-1, cat_slice_size],
             )
-            print(f'categorical: from {(n_slices - 1) * slice_size}'
-                  f' for {cat_slice_size} - {categorical_slice.shape.as_list()}')
+            print(f'categorical: {self.categorical.__class__.__name__} '
+                  f'from 0 for {cat_slice_size} - {categorical_slice.shape.as_list()}')
             categorical_output = self.categorical.add_layer_on_top(categorical_slice)
 
             for i, component in enumerate(self.components):
@@ -641,8 +646,8 @@ class MixtureOutputLayer(RandomVariableOutputLayer):
                     [0, cat_slice_size + i * slice_size],
                     [-1, slice_size],
                 )
-                print(f'component {i}: from {i * slice_size}'
-                      f' for {slice_size} - {component_slice.shape.as_list()}')
+                print(f'component {i+1}: {component.__class__.__name__} '
+                      f'from {cat_slice_size + i * slice_size} for {slice_size} - {component_slice.shape.as_list()}')
                 component_output = component.add_layer_on_top(component_slice)
                 components_outputs.append(component_output)
 
