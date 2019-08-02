@@ -77,42 +77,6 @@ class RandomVariableOutputLayer(abc.ABC):
         description = random_variable.get_description()
         return description
 
-    # def _build_sampling_graph(self):
-    #     with tf.variable_scope(self.name_scope + '/sample'):
-    #         self._pred_placeholder = tf.compat.v1.placeholder(
-    #             dtype=tf.float32,
-    #             shape=(None, self.number_of_output_neurons),
-    #             name='pred_placeholder',
-    #         )
-    #         self._random_variable = self.get_random_variable(self._pred_placeholder)
-    #         self._sample_shape_placeholder = tf.compat.v1.placeholder(tf.int32, None, name='sample_shape_placeholder')
-    #         self._sample_tensor = self._random_variable.sample(self._sample_shape_placeholder)
-
-    # def sample(self, nn_prediction_np, sample_shape=(), sess=None):
-    #
-    #     if self._sample_tensor is None:
-    #         print("Building sampling graph...")
-    #         self._build_sampling_graph()
-    #
-    #     if sess is None:
-    #         with tf.Session() as sess:
-    #             res = sess.run(
-    #                 self._sample_tensor,
-    #                 feed_dict={
-    #                     self._pred_placeholder: nn_prediction_np,
-    #                     self._sample_shape_placeholder: sample_shape
-    #                 }
-    #             )
-    #     else:
-    #         res = sess.run(
-    #             self._sample_tensor,
-    #             feed_dict={
-    #                 self._pred_placeholder: nn_prediction_np,
-    #                 self._sample_shape_placeholder: sample_shape
-    #             }
-    #         )
-    #     return res
-
     def _build_sampling_graph(self, graph=None):
 
         if graph is None:

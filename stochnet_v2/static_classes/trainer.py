@@ -58,22 +58,22 @@ _DEFAULT_BATCH_SIZE = 1024
 _DEFAULT_PREFETCH_SIZE = 10
 _DEFAULT_MOMENTUM = 0.9
 
-_DEFAULT_LEARNING_STRATEGY = ExpDecayLearningStrategy(
-    optimizer_type='adam',
-    initial_lr=1e-4,
-    lr_decay=1e-4,
-    lr_cos_steps=None,
-    lr_cos_phase=np.pi / 2,
-    minimal_lr=1e-7,
-)
-
-# _DEFAULT_LEARNING_STRATEGY = ToleranceDropLearningStrategy(
+# _DEFAULT_LEARNING_STRATEGY = ExpDecayLearningStrategy(
 #     optimizer_type='adam',
 #     initial_lr=1e-4,
-#     lr_decay=0.6,
-#     epochs_tolerance=6,
+#     lr_decay=1e-4,
+#     lr_cos_steps=None,
+#     lr_cos_phase=np.pi / 2,
 #     minimal_lr=1e-7,
 # )
+
+_DEFAULT_LEARNING_STRATEGY = ToleranceDropLearningStrategy(
+    optimizer_type='adam',
+    initial_lr=1e-4,
+    lr_decay=0.6,
+    epochs_tolerance=6,
+    minimal_lr=1e-7,
+)
 
 
 class Trainer:
@@ -193,7 +193,7 @@ class Trainer:
             return train_ds, test_ds
 
         raise ValueError(
-            f"Couldn't recognize the 'kind' key: {kind}. "
+            f"Could not recognize the 'kind' key: {kind}. "
             f"Should be one of ['tfrecord', ]."
         )
 
@@ -364,11 +364,11 @@ class Trainer:
 
                 # reset optimizer parameters for next cosine phase
                 if learning_strategy.__class__.__name__ == 'ExpDecayLearningStrategy':
-                    if (learning_strategy.lr_cos_steps is not None) \
-                            and (global_step % learning_strategy.lr_cos_steps == 0 and global_step > 0):
-                        LOGGER.info('Reinitialize optimizer...')
-                        reset_optimizer()
-                        decay_step = 0
+                    if learning_strategy.lr_cos_steps is not None:
+                        if global_step % learning_strategy.lr_cos_steps == 0 and global_step > 0:
+                            LOGGER.info('Reinitialize optimizer...')
+                            reset_optimizer()
+                            decay_step = 0
 
                 # increase global step
                 session.run(train_operations.increase_global_step)
