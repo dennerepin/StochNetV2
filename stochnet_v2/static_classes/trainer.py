@@ -24,6 +24,7 @@ TrainOperations = namedtuple(
     ],
 )
 
+
 ExpDecayLearningStrategy = namedtuple(
     'ExpDecayLearningStrategy',
     [
@@ -87,6 +88,8 @@ class Trainer:
             n_epochs=_DEFAULT_NUMBER_OF_EPOCHS,
             ckpt_path=None,
     ):
+        model._save_graph_keys()  # TODO: tmp, remove later
+
         save_dir = save_dir or model.model_explorer.model_folder
 
         if learning_strategy is None:
@@ -120,6 +123,10 @@ class Trainer:
                 checkpoints_save_dir=checkpoints_save_dir,
                 tensorboard_log_dir=tensorboard_log_dir,
             )
+
+            model.restore_from_checkpoint(best_loss_checkpoint_path)
+            model.save()
+
             return best_loss_checkpoint_path
 
     def _build_trainable_graph(

@@ -242,7 +242,9 @@ class CategoricalOutputLayer(RandomVariableOutputLayer):
 
     def get_random_variable(self, nn_prediction_tensor):
         self.check_input_shape(nn_prediction_tensor)
-        return Categorical(nn_prediction_tensor)
+        with tf.variable_scope(self.name_scope):
+            with tf.variable_scope('random_variable'):
+                return Categorical(nn_prediction_tensor)
 
     def loss_function(self, y_true, y_pred):
         loss = tf.nn.softmax_cross_entropy_with_logits(
@@ -343,7 +345,7 @@ class MultivariateNormalDiagOutputLayer(RandomVariableOutputLayer):
 
             diag = Dense(
                 self._sample_space_dimension,
-                activation='exponential',
+                activation=tf.exp,
                 name='diag',
                 **self._diag_layer_params,
             )(diag)
@@ -352,19 +354,22 @@ class MultivariateNormalDiagOutputLayer(RandomVariableOutputLayer):
 
     def get_random_variable(self, nn_prediction_tensor):
         self.check_input_shape(nn_prediction_tensor)
-        mu = tf.slice(
-            nn_prediction_tensor,
-            [0, 0],
-            [-1, self._sample_space_dimension],
-            name='mu',
-        )
-        diag = tf.slice(
-            nn_prediction_tensor,
-            [0, self._sample_space_dimension],
-            [-1, self._sample_space_dimension],
-            name='diag',
-        )
-        return MultivariateNormalDiag(mu, diag)
+
+        with tf.variable_scope(self.name_scope):
+            with tf.variable_scope('random_variable'):
+                mu = tf.slice(
+                    nn_prediction_tensor,
+                    [0, 0],
+                    [-1, self._sample_space_dimension],
+                    name='mu',
+                )
+                diag = tf.slice(
+                    nn_prediction_tensor,
+                    [0, self._sample_space_dimension],
+                    [-1, self._sample_space_dimension],
+                    name='diag',
+                )
+                return MultivariateNormalDiag(mu, diag)
 
     def loss_function(self, y_true, y_pred):
         loss = - self.log_likelihood(y_true, y_pred)
@@ -486,7 +491,7 @@ class MultivariateNormalTriLOutputLayer(RandomVariableOutputLayer):
 
             diag = Dense(
                 self._sample_space_dimension,
-                activation='exponential',
+                activation=tf.exp,
                 name='diag',
                 **self._diag_layer_params,
             )(diag)
@@ -502,46 +507,37 @@ class MultivariateNormalTriLOutputLayer(RandomVariableOutputLayer):
 
     def get_random_variable(self, nn_prediction_tensor):
 
-        # def _to_diag_matr(flat_diag):
-        #     return tf.diag(flat_diag)
-        # 
-        # def _to_sub_diag_matr(flat_sub_diag):
-        #     flat_sub_diag = tfd.fill_triangular(flat_sub_diag)
-        #     flat_sub_diag = tf.pad(flat_sub_diag, [[1, 0], [0, 1]])
-        #     return flat_sub_diag
-
-        # def _batch_to_tril(flat_diag, flat_sub_diag):
-        #     diag_matr = tf.map_fn(_to_diag_matr, flat_diag)
-        #     sub_diag_matr = tf.map_fn(_to_sub_diag_matr, flat_sub_diag)
-        #     return diag_matr + sub_diag_matr
-
         def _batch_to_tril(flat_diag, flat_sub_diag):
-            diag_matr = tf.matrix_diag(flat_diag)
+            diag_matr = tf.compat.v1.linalg.diag(flat_diag)
             sub_diag_matr = tfd.fill_triangular(flat_sub_diag)
             sub_diag_matr = tf.pad(sub_diag_matr, paddings=tf.constant([[0, 0], [1, 0], [0, 1]]))
             return diag_matr + sub_diag_matr
 
         self.check_input_shape(nn_prediction_tensor)
-        mu = tf.slice(
-            nn_prediction_tensor,
-            [0, 0],
-            [-1, self._sample_space_dimension],
-            name='mu',
-        )
-        diag = tf.slice(
-            nn_prediction_tensor,
-            [0, self._sample_space_dimension],
-            [-1, self._sample_space_dimension],
-            name='diag',
-        )
-        sub_diag = tf.slice(
-            nn_prediction_tensor,
-            [0, 2 * self._sample_space_dimension],
-            [-1, self._number_of_sub_diag_entries],
-            name='sub_diag',
-        )
-        with tf.control_dependencies([tf.assert_positive(diag)]):
-            tril = _batch_to_tril(diag, sub_diag)
+
+        with tf.variable_scope(self.name_scope):
+            with tf.variable_scope('random_variable'):
+
+                mu = tf.slice(
+                    nn_prediction_tensor,
+                    [0, 0],
+                    [-1, self._sample_space_dimension],
+                    name='mu',
+                )
+                diag = tf.slice(
+                    nn_prediction_tensor,
+                    [0, self._sample_space_dimension],
+                    [-1, self._sample_space_dimension],
+                    name='diag',
+                )
+                sub_diag = tf.slice(
+                    nn_prediction_tensor,
+                    [0, 2 * self._sample_space_dimension],
+                    [-1, self._number_of_sub_diag_entries],
+                    name='sub_diag',
+                )
+                with tf.control_dependencies([tf.assert_positive(diag)]):
+                    tril = _batch_to_tril(diag, sub_diag)
 
         return self.random_variable_class(mu, tril)
 
@@ -648,26 +644,29 @@ class MixtureOutputLayer(RandomVariableOutputLayer):
     def get_random_variable(self, nn_prediction_tensor):
         self.check_input_shape(nn_prediction_tensor)
 
-        categorical_predictions = tf.slice(
-            nn_prediction_tensor,
-            [0, 0],
-            [-1, self.categorical.number_of_output_neurons],
-        )
-        categorical_random_variable = self.categorical.get_random_variable(categorical_predictions)
+        with tf.variable_scope(self.name_scope):
+            with tf.variable_scope('random_variable'):
 
-        components_random_variables = []
-        start_slicing_index = self.categorical.number_of_output_neurons
+                categorical_predictions = tf.slice(
+                    nn_prediction_tensor,
+                    [0, 0],
+                    [-1, self.categorical.number_of_output_neurons],
+                )
+                categorical_random_variable = self.categorical.get_random_variable(categorical_predictions)
 
-        for component in self.components:
-            component_predictions = tf.slice(
-                nn_prediction_tensor,
-                [0, start_slicing_index],
-                [-1, component.number_of_output_neurons]
-            )
-            component_random_variable = component.get_random_variable(component_predictions)
-            components_random_variables.append(component_random_variable)
-            start_slicing_index += component.number_of_output_neurons
-        return Mixture(categorical_random_variable, components_random_variables)
+                components_random_variables = []
+                start_slicing_index = self.categorical.number_of_output_neurons
+
+                for component in self.components:
+                    component_predictions = tf.slice(
+                        nn_prediction_tensor,
+                        [0, start_slicing_index],
+                        [-1, component.number_of_output_neurons]
+                    )
+                    component_random_variable = component.get_random_variable(component_predictions)
+                    components_random_variables.append(component_random_variable)
+                    start_slicing_index += component.number_of_output_neurons
+                return Mixture(categorical_random_variable, components_random_variables)
 
     def loss_function(self, y_true, y_pred):
         loss = - self.log_likelihood(y_true, y_pred)

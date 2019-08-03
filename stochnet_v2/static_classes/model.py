@@ -100,7 +100,7 @@ class StochNet:
 
         with self.graph.as_default():
 
-            self.session = tf.Session()
+            self.session = tf.compat.v1.Session()
 
             if mode == 'normal':
                 if body_fn is None:
@@ -113,10 +113,17 @@ class StochNet:
                     self.restore_from_checkpoint(ckpt_path)
 
             elif mode == 'inference':
-                self._load_model()
+                self._load_model_from_frozen_graph()
+
+            elif mode == 'inference_ckpt':
+                if ckpt_path is None:
+                    raise ValueError("Should provide 'ckpt_path' to build model")
+                self._load_model_from_checkpoint(ckpt_path)
 
             else:
-                raise ValueError("Unknown keyword for 'mode' parameter. Use 'normal' or 'inference'")
+                raise ValueError(
+                    "Unknown keyword for 'mode' parameter. Use 'normal', 'inference' or 'inference_ckpt'"
+                )
 
             LOGGER.info(f"Model created in {mode} mode.")
 
@@ -160,6 +167,7 @@ class StochNet:
             name=os.path.basename(self.model_explorer.frozen_graph_fp),
             as_text=False,
         )
+        LOGGER.info(f"Model's frozen graph saved in {self.model_explorer.model_folder}")
 
     def _freeze_graph(self):
         frozen_graph_def = tf.compat.v1.graph_util.convert_variables_to_constants(
@@ -182,32 +190,42 @@ class StochNet:
         }
         with open(self.model_explorer.graph_keys_fp, 'w') as f:
             json.dump(graph_keys_dict, f, indent='\t')
+        LOGGER.info(f"Model's graph keys saved at {self.model_explorer.graph_keys_fp}")
 
-    def _load_model(self):
+    def _load_model_from_frozen_graph(self):
         graph_path = self.model_explorer.frozen_graph_fp
         if not os.path.exists(graph_path):
             raise FileNotFoundError(
                 f"Could not find model's frozen graph file: {graph_path}. Did you save the model?"
             )
-        graph_keys_path = self.model_explorer.graph_keys_fp
-        if not os.path.exists(graph_path):
-            raise FileNotFoundError(
-                f"Could not find model's graph keys file: {graph_keys_path}. Did you save the model?"
-            )
-        self._load_graph(graph_path)
-        self._load_graph_keys(graph_keys_path)
-        self.restored = True
-
-    @staticmethod
-    def _load_graph(graph_path):
-        graph_def = tf.GraphDef()
+        graph_def = tf.compat.v1.GraphDef()
         with open(graph_path, 'rb') as f:
             graph_def.ParseFromString(f.read())
         tf.import_graph_def(graph_def, name='')
 
-    def _load_graph_keys(self, graph_keys_path):
+        self._load_graph_keys()
+        self.restored = True
+
+    def _load_model_from_checkpoint(self, ckpt_path):
+        meta_ckpt_path = ckpt_path + '.meta'
+        if not os.path.exists(meta_ckpt_path):
+            raise FileNotFoundError(
+                f"Could not find model's checkpoint: {meta_ckpt_path}."
+            )
+        saver = tf.compat.v1.train.import_meta_graph(meta_ckpt_path)
+        saver.restore(self.session, ckpt_path)
+        self._load_graph_keys()
+        self.restored = True
+
+    def _load_graph_keys(self):
+        graph_keys_path = self.model_explorer.graph_keys_fp
+        if not os.path.exists(graph_keys_path):
+            raise FileNotFoundError(
+                f"Could not find model's graph keys file: {graph_keys_path}. Did you save the model?"
+            )
         with open(graph_keys_path, 'r') as f:
             graph_keys = json.load(f)
+
         self.input_placeholder = self.graph.get_tensor_by_name(graph_keys['input_placeholder'])
         self.pred_tensor = self.graph.get_tensor_by_name(graph_keys['pred_tensor'])
         self.pred_placeholder = self.graph.get_tensor_by_name(graph_keys['pred_placeholder'])
