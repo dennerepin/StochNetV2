@@ -110,18 +110,10 @@ class StochNet:
         return scaler
 
     def rescale(self, values):
-        #TODO rewrite?
-        if values.ndim != 2:
-            shape = values.shape
-            values = values.reshape((shape[0], -1))
-            values = self.scaler.transform(values)
-            values = values.reshape(shape)
-        else:
-            values = self.scaler.transform(values)
-        return values
+        return (values - self.scaler.mean_) / self.scaler.scale_
 
     def scale_back(self, values):
-        return self.scaler.inverse_transform(values)
+        return values * self.scaler.scale_ + self.scaler.mean_
 
     def restore_from_checkpoint(self, ckpt_path):
         with self.graph.as_default():
@@ -160,12 +152,11 @@ class StochNet:
             round_result=False,
             n_samples=1,
     ):
-
+        # curr_state_values ~ [batch_size, 1, nb_features]
         if not curr_state_rescaled:
             curr_state_values = self.rescale(curr_state_values)
 
         nn_prediction_values = self.predict(curr_state_values)
-
         next_state = self.sample(nn_prediction_values, sample_shape=(n_samples,))
 
         if scale_back_result:
@@ -173,7 +164,7 @@ class StochNet:
             if round_result:
                 next_state = np.around(next_state)
 
-        # [n_samples, batch_size, 1, nb_features]
+        # next_state ~ [n_samples, batch_size, 1, nb_features]
         return next_state
 
     def generate_traces(
