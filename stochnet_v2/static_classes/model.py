@@ -2,6 +2,7 @@ import numpy as np
 import tensorflow as tf
 import json
 import logging
+import os
 import pickle
 from collections import namedtuple
 
@@ -66,13 +67,14 @@ class StochNet:
             self,
             nb_past_timesteps,
             nb_features,
+            project_folder,
             timestep,
             dataset_id,
-            body_fn,
-            mixture_config_path,
-            project_folder,
-            model_id=None,
+            model_id,
+            body_fn=None,
+            mixture_config_path=None,
             ckpt_path=None,
+            mode='normal',
     ):
         self.nb_past_timesteps = nb_past_timesteps
         self.nb_features = nb_features
@@ -80,37 +82,137 @@ class StochNet:
 
         self.project_explorer = ProjectFileExplorer(project_folder)
         self.dataset_explorer = self.project_explorer.get_dataset_file_explorer(self.timestep, dataset_id)
-        self.model_explorer = self.project_explorer.get_model_file_explorer(self.timestep, model_id or dataset_id)
-        self.variables_checkpoint_path = None
+        self.model_explorer = self.project_explorer.get_model_file_explorer(self.timestep, model_id)
 
-        self.graph = tf.compat.v1.Graph()
-
-        with self.graph.as_default():
-            self.session = tf.Session()
-            self.input_placeholder = tf.compat.v1.placeholder(
-                tf.float32, (None, self.nb_past_timesteps, self.nb_features))
-            self.rv_output_ph = tf.compat.v1.placeholder(tf.float32, (None, self.nb_features))
-            self.body = body_fn(self.input_placeholder)
-            self.top_layer_obj = _get_mixture(mixture_config_path, sample_space_dimension=self.nb_features)
-            self.pred_tensor = self.top_layer_obj.add_layer_on_top(self.body)
-            self.loss = self.top_layer_obj.loss_function(self.rv_output_ph, self.pred_tensor)
-
-        LOGGER.info(f'nn_output shape: {self.pred_tensor.shape}')
-        LOGGER.info(f'loss shape: {self.loss.shape}')
-
-        self.scaler = self.load_scaler()
-
-        self.restored = False
-
-        if ckpt_path:
-            self.restore_from_checkpoint(ckpt_path)
-
+        self._input_placeholder = None
+        self._input_placeholder_name = None
+        self._pred_tensor = None
+        self._pred_tensor_name = None
         self._pred_placeholder = None
         self._pred_placeholder_name = None
         self._sample_shape_placeholder = None
         self._sample_shape_placeholder_name = None
         self._sample_tensor = None
         self._sample_tensor_name = None
+        self.restored = False
+
+        self.graph = tf.compat.v1.Graph()
+
+        with self.graph.as_default():
+
+            self.session = tf.Session()
+
+            if mode == 'normal':
+                if body_fn is None:
+                    raise ValueError("Should provide 'body_fn' to build model")
+                if mixture_config_path is None:
+                    raise ValueError("Should provide 'mixture_config_path' to build model")
+                self._build_main_graph(body_fn, mixture_config_path)
+                self._build_sampling_graph()
+                if ckpt_path:
+                    self.restore_from_checkpoint(ckpt_path)
+
+            elif mode == 'inference':
+                self._load_model()
+
+            else:
+                raise ValueError("Unknown keyword for 'mode' parameter. Use 'normal' or 'inference'")
+
+            LOGGER.info(f"Model created in {mode} mode.")
+
+        self.scaler = self.load_scaler()
+
+    def _build_main_graph(self, body_fn, mixture_config_path):
+        self.input_placeholder = tf.compat.v1.placeholder(
+            tf.float32, (None, self.nb_past_timesteps, self.nb_features))
+        self.rv_output_ph = tf.compat.v1.placeholder(tf.float32, (None, self.nb_features))
+        body = body_fn(self.input_placeholder)
+        self.top_layer_obj = _get_mixture(mixture_config_path, sample_space_dimension=self.nb_features)
+        self.pred_tensor = self.top_layer_obj.add_layer_on_top(body)
+        self.loss = self.top_layer_obj.loss_function(self.rv_output_ph, self.pred_tensor)
+
+    def _build_sampling_graph(self):
+        if self.sample_tensor is not None:
+            return
+        self.top_layer_obj.build_sampling_graph(graph=self.graph)
+        self.pred_placeholder = self.top_layer_obj.pred_placeholder
+        self.sample_shape_placeholder = self.top_layer_obj.sample_shape_placeholder
+        self.sample_tensor = self.top_layer_obj.sample_tensor
+
+    def restore_from_checkpoint(self, ckpt_path):
+        with self.graph.as_default():
+            variables = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES)
+            saver = tf.compat.v1.train.Saver(var_list=variables)
+            saver.restore(self.session, ckpt_path)
+        self.restored = True
+
+    def save(self):
+        if not self.restored:
+            raise NotRestoredVariables()
+        self._save_frozen_graph()
+        self._save_graph_keys()
+
+    def _save_frozen_graph(self):
+        frozen_graph_def = self._freeze_graph()
+        tf.compat.v1.train.write_graph(
+            frozen_graph_def,
+            logdir=self.model_explorer.model_folder,
+            name=os.path.basename(self.model_explorer.frozen_graph_fp),
+            as_text=False,
+        )
+
+    def _freeze_graph(self):
+        frozen_graph_def = tf.compat.v1.graph_util.convert_variables_to_constants(
+            sess=self.session,
+            input_graph_def=self.graph.as_graph_def(),
+            output_node_names=[
+                t.split(':')[0]
+                for t in [self._sample_tensor_name, self._pred_tensor_name]
+            ],
+        )
+        return frozen_graph_def
+
+    def _save_graph_keys(self):
+        graph_keys_dict = {
+            'input_placeholder': self._input_placeholder_name,
+            'pred_tensor': self._pred_tensor_name,
+            'pred_placeholder':  self._pred_placeholder_name,
+            'sample_shape_placeholder': self._sample_shape_placeholder_name,
+            'sample_tensor':  self._sample_tensor_name
+        }
+        with open(self.model_explorer.graph_keys_fp, 'w') as f:
+            json.dump(graph_keys_dict, f, indent='\t')
+
+    def _load_model(self):
+        graph_path = self.model_explorer.frozen_graph_fp
+        if not os.path.exists(graph_path):
+            raise FileNotFoundError(
+                f"Could not find model's frozen graph file: {graph_path}. Did you save the model?"
+            )
+        graph_keys_path = self.model_explorer.graph_keys_fp
+        if not os.path.exists(graph_path):
+            raise FileNotFoundError(
+                f"Could not find model's graph keys file: {graph_keys_path}. Did you save the model?"
+            )
+        self._load_graph(graph_path)
+        self._load_graph_keys(graph_keys_path)
+        self.restored = True
+
+    @staticmethod
+    def _load_graph(graph_path):
+        graph_def = tf.GraphDef()
+        with open(graph_path, 'rb') as f:
+            graph_def.ParseFromString(f.read())
+        tf.import_graph_def(graph_def, name='')
+
+    def _load_graph_keys(self, graph_keys_path):
+        with open(graph_keys_path, 'r') as f:
+            graph_keys = json.load(f)
+        self.input_placeholder = self.graph.get_tensor_by_name(graph_keys['input_placeholder'])
+        self.pred_tensor = self.graph.get_tensor_by_name(graph_keys['pred_tensor'])
+        self.pred_placeholder = self.graph.get_tensor_by_name(graph_keys['pred_placeholder'])
+        self.sample_shape_placeholder = self.graph.get_tensor_by_name(graph_keys['sample_shape_placeholder'])
+        self.sample_tensor = self.graph.get_tensor_by_name(graph_keys['sample_tensor'])
 
     @property
     def input_placeholder(self):
@@ -168,35 +270,6 @@ class StochNet:
     def scale_back(self, values):
         return values * self.scaler.scale_ + self.scaler.mean_
 
-    def restore_from_checkpoint(self, ckpt_path):
-        with self.graph.as_default():
-            variables = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES)
-            saver = tf.compat.v1.train.Saver(var_list=variables)
-            saver.restore(self.session, ckpt_path)
-        self.restored = True
-
-    # def predict(self, curr_state_values):
-    #
-    #     if not self.restored:
-    #         raise NotRestoredVariables()
-    #
-    #     prediction_values = self.session.run(
-    #         self._pred_tensor,
-    #         feed_dict={
-    #             self._input_placeholder: curr_state_values
-    #         }
-    #     )
-    #     return prediction_values
-
-    # def sample(self, prediction_values, sample_shape=()):
-    #     sample = self.top_layer_obj.sample_fast(
-    #         prediction_values,
-    #         session=self.session,
-    #         sample_shape=sample_shape,
-    #     )
-    #     sample = np.expand_dims(sample, -2)
-    #     return sample
-
     def predict(self, curr_state_values):
 
         if not self.restored:
@@ -209,28 +282,6 @@ class StochNet:
             }
         )
         return prediction_values
-
-    def _build_sampling_graph(self):
-        if self.sample_tensor is not None:
-            return
-        self.top_layer_obj.build_sampling_graph(graph=self.graph)
-        self.pred_placeholder = self.top_layer_obj.pred_placeholder
-        self.sample_shape_placeholder = self.top_layer_obj.sample_shape_placeholder
-        self.sample_tensor = self.top_layer_obj.sample_tensor
-
-    # def sample(self, prediction_values, sample_shape=()):
-    #     if self.sample_tensor is None:
-    #         self._build_sampling_graph()
-    #
-    #     sample = self.session.run(
-    #         self.sample_tensor,
-    #         feed_dict={
-    #             self.pred_placeholder: prediction_values,
-    #             self.sample_shape_placeholder: sample_shape,
-    #         }
-    #     )
-    #     sample = np.expand_dims(sample, -2)
-    #     return sample
 
     def sample(self, prediction_values, sample_shape=()):
         if self.sample_tensor is None:

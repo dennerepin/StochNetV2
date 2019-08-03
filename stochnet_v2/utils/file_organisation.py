@@ -82,10 +82,8 @@ class ModelFileExplorer:
             str(self.model_id),
         )
         maybe_create_dir(self.model_folder)
-        self.log_fp = os.path.join(self.model_folder, 'log.txt')
-        self.weights_fp = os.path.join(self.model_folder, 'best_weights.h5')
-        self.keras_fp = os.path.join(self.model_folder, 'keras_model.h5')
-        self.stochnet_fp = os.path.join(self.model_folder, 'StochNet_object.h5')
+        self.frozen_graph_fp = os.path.join(self.model_folder, 'frozen_graph.pb')
+        self.graph_keys_fp = os.path.join(self.model_folder, 'graph_keys.json')
 
 
 class HistogramFileExplorer:

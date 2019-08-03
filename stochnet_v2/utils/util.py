@@ -36,3 +36,9 @@ def count_parameters(model):
 def count_dense_flop(layer, x):
     return (x.shape.as_list()[-1] + 1) * layer.units
 
+
+def graph_def_to_graph(graph_def):
+    graph = tf.compat.v1.Graph()
+    with graph.as_default():
+        tf.import_graph_def(graph_def, name='')
+    return graph
