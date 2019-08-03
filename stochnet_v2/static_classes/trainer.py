@@ -129,7 +129,7 @@ class Trainer:
     ):
         trainable_graph = tf.compat.v1.Graph()
         copy_graph(model.graph, trainable_graph)
-        model_input = get_transformed_tensor(model.input_ph, trainable_graph)
+        model_input = get_transformed_tensor(model.input_placeholder, trainable_graph)
         rv_output = get_transformed_tensor(model.rv_output_ph, trainable_graph)
         loss = get_transformed_tensor(model.loss, trainable_graph)
 

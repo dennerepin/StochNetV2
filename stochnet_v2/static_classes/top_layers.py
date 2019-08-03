@@ -77,42 +77,26 @@ class RandomVariableOutputLayer(abc.ABC):
         description = random_variable.get_description()
         return description
 
-    def _build_sampling_graph(self, graph=None):
+    def build_sampling_graph(self, graph=None):
 
-        if graph is None:
-            self._sampling_graph = tf.compat.v1.Graph()
-            with self._sampling_graph.as_default():
-                with tf.variable_scope(self.name_scope + '/sample'):
-                    self._pred_placeholder = tf.compat.v1.placeholder(
-                        dtype=tf.float32,
-                        shape=(None, self.number_of_output_neurons),
-                        name='pred_placeholder',
-                    )
-                    self._random_variable = self.get_random_variable(self._pred_placeholder)
-                    self._sample_shape_placeholder = tf.compat.v1.placeholder(
-                        tf.int32, None, name='sample_shape_placeholder'
-                    )
-                    self._sample_tensor = self._random_variable.sample(self._sample_shape_placeholder)
-
-        else:
-            with graph.as_default():
-                with tf.variable_scope(self.name_scope + '/sample'):
-                    self._pred_placeholder_ext = tf.compat.v1.placeholder(
-                        dtype=tf.float32,
-                        shape=(None, self.number_of_output_neurons),
-                        name='pred_placeholder_ext',
-                    )
-                    self._random_variable_ext = self.get_random_variable(self._pred_placeholder_ext)
-                    self._sample_shape_placeholder_ext = tf.compat.v1.placeholder(
-                        tf.int32, None, name='sample_shape_placeholder_ext'
-                    )
-                    self._sample_tensor_ext = self._random_variable_ext.sample(self._sample_shape_placeholder_ext)
+        self._sampling_graph = graph or tf.compat.v1.Graph()
+        with self._sampling_graph.as_default():
+            with tf.variable_scope(self.name_scope + '/sample'):
+                self._pred_placeholder = tf.compat.v1.placeholder(
+                    dtype=tf.float32,
+                    shape=(None, self.number_of_output_neurons),
+                    name='pred_placeholder',
+                )
+                self._random_variable = self.get_random_variable(self._pred_placeholder)
+                self._sample_shape_placeholder = tf.compat.v1.placeholder(
+                    tf.int32, None, name='sample_shape_placeholder'
+                )
+                self._sample_tensor = self._random_variable.sample(self._sample_shape_placeholder)
 
     def sample(self, nn_prediction_np, sample_shape=()):
 
         if self._sampling_graph is None:
-            print("Building sampling graph...")
-            self._build_sampling_graph()
+            self.build_sampling_graph()
 
         with tf.Session(graph=self._sampling_graph) as sess:
             res = sess.run(
@@ -124,23 +108,66 @@ class RandomVariableOutputLayer(abc.ABC):
             )
         return res
 
-    def memorize_session(self, session):
-        self._session_hash = session.__hash__()
+    # def build_sampling_graph(self, graph=None):
+    #
+    #     if graph is None:
+    #         self._sampling_graph = tf.compat.v1.Graph()
+    #         with self._sampling_graph.as_default():
+    #             with tf.variable_scope(self.name_scope + '/sample'):
+    #                 self._pred_placeholder = tf.compat.v1.placeholder(
+    #                     dtype=tf.float32,
+    #                     shape=(None, self.number_of_output_neurons),
+    #                     name='pred_placeholder',
+    #                 )
+    #                 self._random_variable = self.get_random_variable(self._pred_placeholder)
+    #                 self._sample_shape_placeholder = tf.compat.v1.placeholder(
+    #                     tf.int32, None, name='sample_shape_placeholder'
+    #                 )
+    #                 self._sample_tensor = self._random_variable.sample(self._sample_shape_placeholder)
+    #
+    #     else:
+    #         with graph.as_default():
+    #             with tf.variable_scope(self.name_scope + '/sample'):
+    #                 self._pred_placeholder_ext = tf.compat.v1.placeholder(
+    #                     dtype=tf.float32,
+    #                     shape=(None, self.number_of_output_neurons),
+    #                     name='pred_placeholder_ext',
+    #                 )
+    #                 self._random_variable_ext = self.get_random_variable(self._pred_placeholder_ext)
+    #                 self._sample_shape_placeholder_ext = tf.compat.v1.placeholder(
+    #                     tf.int32, None, name='sample_shape_placeholder_ext'
+    #                 )
+    #                 self._sample_tensor_ext = self._random_variable_ext.sample(self._sample_shape_placeholder_ext)
+    #
+    # def memorize_session(self, session):
+    #     self._session_hash = session.__hash__()
+    #
+    # def sample_fast(self, nn_prediction_np, session, sample_shape=()):
+    #     if self._session_hash != session.__hash__():
+    #         print("Building external sampling graph...")
+    #         self.memorize_session(session)
+    #         self.build_sampling_graph(graph=session.graph)
+    #
+    #     res = session.run(
+    #         self._sample_tensor_ext,
+    #         feed_dict={
+    #             self._pred_placeholder_ext: nn_prediction_np,
+    #             self._sample_shape_placeholder_ext: sample_shape
+    #         }
+    #     )
+    #     return res
 
-    def sample_fast(self, nn_prediction_np, session, sample_shape=()):
-        if self._session_hash != session.__hash__():
-            print("Building external sampling graph...")
-            self.memorize_session(session)
-            self._build_sampling_graph(graph=session.graph)
+    @property
+    def pred_placeholder(self):
+        return self._pred_placeholder
 
-        res = session.run(
-            self._sample_tensor_ext,
-            feed_dict={
-                self._pred_placeholder_ext: nn_prediction_np,
-                self._sample_shape_placeholder_ext: sample_shape
-            }
-        )
-        return res
+    @property
+    def sample_shape_placeholder(self):
+        return self._sample_shape_placeholder
+
+    @property
+    def sample_tensor(self):
+        return self._sample_tensor
 
 
 @MIXTURE_COMPONENTS_REGISTRY.register('categorical')

@@ -87,14 +87,15 @@ class StochNet:
 
         with self.graph.as_default():
             self.session = tf.Session()
-            self.input_ph = tf.compat.v1.placeholder(tf.float32, (None, self.nb_past_timesteps, self.nb_features))
+            self.input_placeholder = tf.compat.v1.placeholder(
+                tf.float32, (None, self.nb_past_timesteps, self.nb_features))
             self.rv_output_ph = tf.compat.v1.placeholder(tf.float32, (None, self.nb_features))
-            self.body = body_fn(self.input_ph)
+            self.body = body_fn(self.input_placeholder)
             self.top_layer_obj = _get_mixture(mixture_config_path, sample_space_dimension=self.nb_features)
-            self.nn_output = self.top_layer_obj.add_layer_on_top(self.body)
-            self.loss = self.top_layer_obj.loss_function(self.rv_output_ph, self.nn_output)
+            self.pred_tensor = self.top_layer_obj.add_layer_on_top(self.body)
+            self.loss = self.top_layer_obj.loss_function(self.rv_output_ph, self.pred_tensor)
 
-        LOGGER.info(f'nn_output shape: {self.nn_output.shape}')
+        LOGGER.info(f'nn_output shape: {self.pred_tensor.shape}')
         LOGGER.info(f'loss shape: {self.loss.shape}')
 
         self.scaler = self.load_scaler()
@@ -103,6 +104,58 @@ class StochNet:
 
         if ckpt_path:
             self.restore_from_checkpoint(ckpt_path)
+
+        self._pred_placeholder = None
+        self._pred_placeholder_name = None
+        self._sample_shape_placeholder = None
+        self._sample_shape_placeholder_name = None
+        self._sample_tensor = None
+        self._sample_tensor_name = None
+
+    @property
+    def input_placeholder(self):
+        return self._input_placeholder
+
+    @input_placeholder.setter
+    def input_placeholder(self, tensor):
+        self._input_placeholder = tensor
+        self._input_placeholder_name = tensor.name
+
+    @property
+    def pred_tensor(self):
+        return self._pred_tensor
+
+    @pred_tensor.setter
+    def pred_tensor(self, tensor):
+        self._pred_tensor = tensor
+        self._pred_tensor_name = tensor.name
+
+    @property
+    def pred_placeholder(self):
+        return self._pred_placeholder
+
+    @pred_placeholder.setter
+    def pred_placeholder(self, tensor):
+        self._pred_placeholder = tensor
+        self._pred_placeholder_name = tensor.name
+
+    @property
+    def sample_shape_placeholder(self):
+        return self._sample_shape_placeholder
+
+    @sample_shape_placeholder.setter
+    def sample_shape_placeholder(self, tensor):
+        self._sample_shape_placeholder = tensor
+        self._sample_shape_placeholder_name = tensor.name
+
+    @property
+    def sample_tensor(self):
+        return self._sample_tensor
+
+    @sample_tensor.setter
+    def sample_tensor(self, tensor):
+        self._sample_tensor = tensor
+        self._sample_tensor_name = tensor.name
 
     def load_scaler(self):
         with open(self.dataset_explorer.scaler_fp, 'rb') as file:
@@ -122,24 +175,73 @@ class StochNet:
             saver.restore(self.session, ckpt_path)
         self.restored = True
 
+    # def predict(self, curr_state_values):
+    #
+    #     if not self.restored:
+    #         raise NotRestoredVariables()
+    #
+    #     prediction_values = self.session.run(
+    #         self._pred_tensor,
+    #         feed_dict={
+    #             self._input_placeholder: curr_state_values
+    #         }
+    #     )
+    #     return prediction_values
+
+    # def sample(self, prediction_values, sample_shape=()):
+    #     sample = self.top_layer_obj.sample_fast(
+    #         prediction_values,
+    #         session=self.session,
+    #         sample_shape=sample_shape,
+    #     )
+    #     sample = np.expand_dims(sample, -2)
+    #     return sample
+
     def predict(self, curr_state_values):
 
         if not self.restored:
             raise NotRestoredVariables()
 
         prediction_values = self.session.run(
-            self.nn_output,
+            self._pred_tensor_name,
             feed_dict={
-                self.input_ph: curr_state_values
+                self._input_placeholder_name: curr_state_values
             }
         )
         return prediction_values
 
+    def _build_sampling_graph(self):
+        if self.sample_tensor is not None:
+            return
+        self.top_layer_obj.build_sampling_graph(graph=self.graph)
+        self.pred_placeholder = self.top_layer_obj.pred_placeholder
+        self.sample_shape_placeholder = self.top_layer_obj.sample_shape_placeholder
+        self.sample_tensor = self.top_layer_obj.sample_tensor
+
+    # def sample(self, prediction_values, sample_shape=()):
+    #     if self.sample_tensor is None:
+    #         self._build_sampling_graph()
+    #
+    #     sample = self.session.run(
+    #         self.sample_tensor,
+    #         feed_dict={
+    #             self.pred_placeholder: prediction_values,
+    #             self.sample_shape_placeholder: sample_shape,
+    #         }
+    #     )
+    #     sample = np.expand_dims(sample, -2)
+    #     return sample
+
     def sample(self, prediction_values, sample_shape=()):
-        sample = self.top_layer_obj.sample_fast(
-            prediction_values,
-            session=self.session,
-            sample_shape=sample_shape,
+        if self.sample_tensor is None:
+            self._build_sampling_graph()
+
+        sample = self.session.run(
+            self._sample_tensor_name,
+            feed_dict={
+                self._pred_placeholder_name: prediction_values,
+                self._sample_shape_placeholder_name: sample_shape,
+            }
         )
         sample = np.expand_dims(sample, -2)
         return sample
@@ -225,273 +327,3 @@ class StochNet:
             traces = np.concatenate([timespan, traces], axis=-1)
 
         return traces
-
-    # def get_dataset(
-    #         self,
-    #         tf_records_fp,
-    #         batch_size,
-    #         prefetch_size=None,
-    #         shuffle=True,
-    # ):
-    #     return TFRecordsDataset(
-    #         records_paths=tf_records_fp,
-    #         batch_size=batch_size,
-    #         prefetch_size=prefetch_size,
-    #         shuffle=shuffle,
-    #         nb_past_timesteps=self.nb_past_timesteps,
-    #         nb_features=self.nb_features,
-    #     )
-
-    # def train(
-    #         self,
-    #         save_dir=None,
-    #         learning_strategy=None,
-    #         batch_size=_DEFAULT_BATCH_SIZE,
-    #         prefetch_size=_DEFAULT_PREFETCH_SIZE,
-    #         n_epochs=_DEFAULT_NUMBER_OF_EPOCHS,
-    # ):
-    #
-    #     save_dir = save_dir or self.model_explorer.model_folder
-    #
-    #     if learning_strategy is None:
-    #         learning_strategy = _DEFAULT_LEARNING_STRATEGY
-    #
-    #     trainable_graph, train_operations, train_input_x, train_input_y = \
-    #         self._build_trainable_graph(learning_strategy)
-    #
-    #     with tf.Session(graph=trainable_graph) as session:
-    #         session.run(tf.compat.v1.global_variables_initializer())
-    #         best_loss_checkpoint_path = self._train(
-    #             session=session,
-    #             train_operations=train_operations,
-    #             train_input_x=train_input_x,
-    #             train_input_y=train_input_y,
-    #             learning_strategy=learning_strategy,
-    #             n_epochs=n_epochs,
-    #             batch_size=batch_size,
-    #             prefetch_size=prefetch_size,
-    #             save_dir=save_dir,
-    #         )
-    #         self.variables_checkpoint_path = best_loss_checkpoint_path
-    #
-    #         return best_loss_checkpoint_path
-    #
-    # def _build_trainable_graph(
-    #         self,
-    #         learning_strategy,
-    # ):
-    #     trainable_graph = tf.compat.v1.Graph()
-    #     copy_graph(self.graph, trainable_graph)
-    #     model_input = get_transformed_tensor(self.input_ph, trainable_graph)
-    #     rv_output = get_transformed_tensor(self.rv_output_ph, trainable_graph)
-    #     loss = get_transformed_tensor(self.loss, trainable_graph)
-    #
-    #     with trainable_graph.as_default():
-    #
-    #         learning_rate = tf.compat.v1.placeholder_with_default(
-    #             learning_strategy.initial_lr,
-    #             shape=[],
-    #             name='learning_rate',
-    #         )
-    #
-    #         optimizer_type = learning_strategy.optimizer_type.lower()
-    #         if optimizer_type == 'adam':
-    #             optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate)
-    #         elif optimizer_type == 'sgd':
-    #             optimizer = tf.compat.v1.train.MomentumOptimizer(learning_rate, _DEFAULT_MOMENTUM)
-    #         else:
-    #             raise NotImplementedError(f'optimizer "{optimizer_type}" is not supported')
-    #
-    #         gradients = optimizer.compute_gradients(loss, var_list=tf.trainable_variables())
-    #         gradients = optimizer.apply_gradients(gradients)
-    #
-    #         train_operations = TrainOperations(gradients, learning_rate, loss)
-    #         train_input_x = model_input
-    #         train_input_y = rv_output
-    #
-    #         return trainable_graph, train_operations, train_input_x, train_input_y
-    #
-    # def _train(
-    #         self,
-    #         session,
-    #         train_operations,
-    #         train_input_x,
-    #         train_input_y,
-    #         learning_strategy,
-    #         n_epochs,
-    #         batch_size,
-    #         prefetch_size,
-    #         save_dir,
-    # ):
-    #     tensorboard_log_dir = os.path.join(save_dir, 'tensorboard')
-    #     checkpoints_save_dir = os.path.join(save_dir, 'checkpoints')
-    #     maybe_create_dir(tensorboard_log_dir, erase_existing=True)
-    #     maybe_create_dir(checkpoints_save_dir, erase_existing=True)
-    #
-    #     global_vars = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.GLOBAL_VARIABLES)
-    #     trainable_vars = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES)
-    #     optimizer_vars = list(set(global_vars) - set(trainable_vars))
-    #
-    #     LOGGER.info(f'Total number of trainable vars {len(trainable_vars)}')
-    #     LOGGER.info(f'Total number of optimizer vars {len(optimizer_vars)}')
-    #
-    #     session.run(tf.compat.v1.global_variables_initializer())
-    #
-    #     regular_checkpoints_saver = tf.compat.v1.train.Saver(
-    #         var_list=trainable_vars,
-    #         max_to_keep=_NUMBER_OF_REGULAR_CHECKPOINTS,
-    #     )
-    #     best_loss_checkpoints_saver = tf.compat.v1.train.Saver(
-    #         var_list=trainable_vars,
-    #         max_to_keep=_NUMBER_OF_BEST_LOSS_CHECKPOINTS,
-    #     )
-    #
-    #     summary_writer = tf.compat.v1.summary.FileWriter(tensorboard_log_dir, session.graph)
-    #
-    #     train_loss_summary = tf.compat.v1.summary.scalar('train_loss', train_operations.loss)
-    #     learning_rate_summary = tf.compat.v1.summary.scalar('train_learning_rate', train_operations.learning_rate)
-    #
-    #     test_mean_loss_ph = tf.compat.v1.placeholder(tf.float32, ())
-    #     test_loss_summary = tf.compat.v1.summary.scalar('test_mean_loss', test_mean_loss_ph)
-    #
-    #     initial_learning_rate = session.run(train_operations.learning_rate)
-    #     next_learning_rate = initial_learning_rate
-    #
-    #     train_step = 0
-    #     decay_step = 0
-    #     nans_step_counter = 0
-    #
-    #     best_loss = float('inf')
-    #     best_loss_step = 0
-    #
-    #     def reset_optimizer():
-    #         init_optimizer_vars = tf.compat.v1.variables_initializer(optimizer_vars)
-    #         session.run(init_optimizer_vars)
-    #
-    #     def get_regular_checkpoint_path(step):
-    #         return os.path.join(checkpoints_save_dir, f'regular_ckpt_{step}')
-    #
-    #     def get_best_checkpoint_path(step):
-    #         return os.path.join(checkpoints_save_dir, f'best_ckpt_{step}')
-    #
-    #     train_dataset = self.get_dataset(
-    #         self.dataset_explorer.train_records_rescaled_fp,
-    #         batch_size=batch_size,
-    #         prefetch_size=prefetch_size,
-    #     )
-    #     test_dataset = self.get_dataset(
-    #         self.dataset_explorer.test_records_rescaled_fp,
-    #         batch_size=batch_size,
-    #     )
-    #
-    #     regular_checkpoints_saver.save(
-    #         session,
-    #         get_regular_checkpoint_path(train_step)
-    #     )
-    #
-    #     LOGGER.info('Training...')
-    #
-    #     for epoch in range(n_epochs):
-    #
-    #         LOGGER.info(f'Epoch: {epoch + 1}')
-    #
-    #         for X_train, Y_train in train_dataset:
-    #
-    #             feed_dict = {
-    #                 train_input_x: X_train,
-    #                 train_input_y: Y_train,
-    #                 train_operations.learning_rate: next_learning_rate,
-    #             }
-    #             fetches = {
-    #                 'gradients': train_operations.gradients,
-    #                 'loss': train_operations.loss,
-    #                 'learning_rate_summary': learning_rate_summary,
-    #                 'loss_summary': train_loss_summary,
-    #             }
-    #
-    #             result = session.run(fetches=fetches, feed_dict=feed_dict)
-    #
-    #             next_learning_rate = initial_learning_rate.copy()
-    #             next_learning_rate *= np.exp(-train_step * learning_strategy.lr_decay)
-    #             next_learning_rate *= np.abs(
-    #                 np.cos(learning_strategy.lr_cos_phase * decay_step / learning_strategy.lr_cos_steps)
-    #             )
-    #             next_learning_rate += _MINIMAL_LEARNING_RATE
-    #
-    #             summary_writer.add_summary(result['learning_rate_summary'], train_step)
-    #             summary_writer.add_summary(result['loss_summary'], train_step)
-    #
-    #             has_nans = any([
-    #                 np.isnan(result['loss']),
-    #             ])
-    #             if has_nans:
-    #                 LOGGER.warning(f'Loss is None on step {train_step}, restore previous checkpoint...')
-    #                 nans_step_counter += 1
-    #                 checkpoint_step = train_step // _REGULAR_CHECKPOINTS_DELTA
-    #                 checkpoint_step -= nans_step_counter
-    #                 checkpoint_step = max(checkpoint_step, 0)
-    #                 checkpoint_step *= _REGULAR_CHECKPOINTS_DELTA
-    #
-    #                 if checkpoint_step == 0:
-    #                     LOGGER.info(f'checkpoint_step is 0, reinitialize all variables...')
-    #                     session.run(tf.compat.v1.variables_initializer(global_vars))
-    #                 else:
-    #                     regular_checkpoints_saver.restore(
-    #                         session,
-    #                         get_regular_checkpoint_path(checkpoint_step)
-    #                     )
-    #                     reset_optimizer()
-    #                 continue
-    #
-    #             if result['loss'] < best_loss:
-    #                 best_loss_checkpoints_saver.save(session, get_best_checkpoint_path(train_step))
-    #                 best_loss, best_loss_step = result['loss'], train_step
-    #
-    #             if train_step % _REGULAR_CHECKPOINTS_DELTA == 0:
-    #                 nans_step_counter = 0
-    #                 regular_checkpoints_saver.save(
-    #                     session,
-    #                     get_regular_checkpoint_path(train_step)
-    #                 )
-    #
-    #             train_step += 1
-    #             decay_step += 1
-    #
-    #             if train_step % learning_strategy.lr_cos_steps == 0:
-    #                 LOGGER.info('Reinitialize optimizer...')
-    #                 reset_optimizer()
-    #                 decay_step = 0
-    #
-    #         test_losses = []
-    #
-    #         for X_test, Y_test in test_dataset:
-    #
-    #             feed_dict = {
-    #                 train_input_x: X_test,
-    #                 train_input_y: Y_test,
-    #             }
-    #             fetches = {
-    #                 'loss': train_operations.loss,
-    #             }
-    #
-    #             result = session.run(fetches=fetches, feed_dict=feed_dict)
-    #             test_losses.append(result['loss'])
-    #
-    #         test_mean_loss = np.mean(test_losses)
-    #         test_loss_summary_val = session.run(
-    #             test_loss_summary,
-    #             feed_dict={test_mean_loss_ph: test_mean_loss}
-    #         )
-    #         summary_writer.add_summary(test_loss_summary_val, epoch)
-    #
-    #         LOGGER.info(f'minimal loss value = {best_loss}')
-    #
-    #     # best_loss_checkpoints_saver.restore(
-    #     #     session,
-    #     #     get_best_checkpoint_path(best_loss_step)
-    #     # )
-    #     best_checkpoint_path = get_best_checkpoint_path(best_loss_step)
-    #
-    #     return best_checkpoint_path
-
-
