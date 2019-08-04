@@ -88,8 +88,6 @@ class Trainer:
             n_epochs=_DEFAULT_NUMBER_OF_EPOCHS,
             ckpt_path=None,
     ):
-        model._save_graph_keys()  # TODO: tmp, remove later
-
         save_dir = save_dir or model.model_explorer.model_folder
 
         if learning_strategy is None:

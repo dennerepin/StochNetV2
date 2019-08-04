@@ -5,7 +5,9 @@ import logging
 import os
 import pickle
 from collections import namedtuple
+from functools import partial
 
+from stochnet_v2.static_classes import nn_bodies
 from stochnet_v2.static_classes.top_layers import MixtureOutputLayer
 from stochnet_v2.static_classes.top_layers import MIXTURE_COMPONENTS_REGISTRY
 from stochnet_v2.utils.file_organisation import ProjectFileExplorer
@@ -21,14 +23,11 @@ LOGGER = logging.getLogger('static_classes.model')
 ComponentDescription = namedtuple('ComponentDescription', ['name', 'parameters'])
 
 
-def _get_mixture(config_path, sample_space_dimension):
-
-    with open(config_path, 'r') as f:
-        top_layer_conf = json.load(f)
+def _get_mixture(config, sample_space_dimension):
 
     categorical = None
     components = []
-    descriptions = [ComponentDescription(name, params) for (name, params) in top_layer_conf]
+    descriptions = [ComponentDescription(name, params) for (name, params) in config]
 
     for description in descriptions:
 
@@ -61,6 +60,19 @@ def _get_mixture(config_path, sample_space_dimension):
     return MixtureOutputLayer(categorical, components)
 
 
+def get_body_fn(config):
+
+    body_fn_name = config.pop('body_fn', None)
+    if body_fn_name is None:
+        raise ValueError(f"`body_fn` parameter not specified in config")
+
+    body_fn = getattr(nn_bodies, body_fn_name, None)
+    if body_fn is None:
+        raise ValueError(f"`body_fn` name {body_fn_name} not found in {nn_bodies.__file__}")
+
+    return partial(body_fn, **config)
+
+
 class StochNet:
 
     def __init__(
@@ -71,7 +83,7 @@ class StochNet:
             timestep,
             dataset_id,
             model_id,
-            body_fn=None,
+            body_config_path=None,
             mixture_config_path=None,
             ckpt_path=None,
             mode='normal',
@@ -103,12 +115,18 @@ class StochNet:
             self.session = tf.compat.v1.Session()
 
             if mode == 'normal':
-                if body_fn is None:
-                    raise ValueError("Should provide 'body_fn' to build model")
+                if body_config_path is None:
+                    raise ValueError("Should provide `body_config_path` to build model")
+                body_config = self._read_config(body_config_path, True)
+
                 if mixture_config_path is None:
-                    raise ValueError("Should provide 'mixture_config_path' to build model")
-                self._build_main_graph(body_fn, mixture_config_path)
+                    raise ValueError("Should provide `mixture_config_path` to build model")
+                mixture_config = self._read_config(mixture_config_path, True)
+
+                body_fn = get_body_fn(body_config)
+                self._build_main_graph(body_fn, mixture_config)
                 self._build_sampling_graph()
+                self._save_graph_keys()
                 if ckpt_path:
                     self.restore_from_checkpoint(ckpt_path)
 
@@ -117,17 +135,32 @@ class StochNet:
 
             elif mode == 'inference_ckpt':
                 if ckpt_path is None:
-                    raise ValueError("Should provide 'ckpt_path' to build model")
+                    raise ValueError("Should provide `ckpt_path` to build model")
                 self._load_model_from_checkpoint(ckpt_path)
 
             else:
                 raise ValueError(
-                    "Unknown keyword for 'mode' parameter. Use 'normal', 'inference' or 'inference_ckpt'"
+                    "Unknown keyword for `mode` parameter. Use 'normal', 'inference' or 'inference_ckpt'"
                 )
 
             LOGGER.info(f"Model created in {mode} mode.")
 
         self.scaler = self.load_scaler()
+
+    def _read_config(self, file_path, save_to_model_dir=False):
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"Config file not found: {file_path}")
+
+        with open(file_path, 'r') as f:
+            config = json.load(f)
+
+        if save_to_model_dir is True:
+            file_name = os.path.basename(file_path)
+            save_path = os.path.join(self.model_explorer.model_folder, file_name)
+            with open(save_path, 'w') as f:
+                json.dump(config, f, indent='\t')
+
+        return config
 
     def _build_main_graph(self, body_fn, mixture_config_path):
         self.input_placeholder = tf.compat.v1.placeholder(
