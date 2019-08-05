@@ -361,7 +361,8 @@ class StochNet:
             curr_state_values = self.rescale(curr_state_values)
 
         nn_prediction_values = self.predict(curr_state_values)
-        next_state = self.sample(nn_prediction_values, sample_shape=(n_samples,))
+        state_update_vector = self.sample(nn_prediction_values, sample_shape=(n_samples,))
+        next_state = curr_state_rescaled + state_update_vector
 
         if scale_back_result:
             next_state = self.scale_back(next_state)
