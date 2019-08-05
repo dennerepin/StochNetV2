@@ -352,7 +352,6 @@ class StochNet:
             self,
             curr_state_values,
             curr_state_rescaled=False,
-            scale_back_result=True,
             round_result=False,
             n_samples=1,
     ):
@@ -362,15 +361,80 @@ class StochNet:
 
         nn_prediction_values = self.predict(curr_state_values)
         state_update_vector = self.sample(nn_prediction_values, sample_shape=(n_samples,))
-        next_state = curr_state_rescaled + state_update_vector
 
-        if scale_back_result:
-            next_state = self.scale_back(next_state)
-            if round_result:
-                next_state = np.around(next_state)
+        next_state = self.scale_back_sum(curr_state_values + state_update_vector)
+        next_state = np.maximum(0, next_state)
+
+        if round_result:
+            next_state = np.around(next_state)
 
         # next_state ~ [n_samples, batch_size, 1, nb_features]
         return next_state
+
+    def scale_back_sum(self, data):
+        data *= self.scaler.scale_
+        data += 2 * self.scaler.mean_
+        return data
+
+    # def generate_traces(
+    #         self,
+    #         curr_state_values,
+    #         n_steps,
+    #         n_traces=1,
+    #         curr_state_rescaled=False,
+    #         scale_back_result=True,
+    #         round_result=False,
+    #         add_timesteps=False,
+    # ):
+    #     batch_size, *state_shape = curr_state_values.shape
+    #     traces = np.zeros((n_steps + 1, n_traces, batch_size, *state_shape))
+    #
+    #     if not curr_state_rescaled:
+    #         curr_state_values = self.rescale(curr_state_values)
+    #
+    #     traces[0] = curr_state_values
+    #
+    #     next_state_values = self.next_state(
+    #             curr_state_values,
+    #             curr_state_rescaled=True,
+    #             scale_back_result=False,
+    #             round_result=False,
+    #             n_samples=n_traces,
+    #         )
+    #     traces[1] = next_state_values
+    #
+    #     for step in range(2, n_steps + 1):
+    #         print(step)
+    #         next_state_values = next_state_values.reshape((-1, *state_shape))
+    #         next_state_values = self.next_state(
+    #             next_state_values,
+    #             curr_state_rescaled=True,
+    #             scale_back_result=False,
+    #             round_result=False,
+    #             n_samples=1,
+    #         )
+    #         next_state_values = next_state_values.reshape((-1, batch_size, *state_shape))
+    #         # next_state_values = np.maximum(0, next_state_values)
+    #         traces[step] = next_state_values
+    #
+    #     # [n_steps, n_traces, batch_size, 1, nb_features] -> [n_steps, n_traces, batch_size, nb_features]
+    #     traces = np.squeeze(traces, axis=-2)
+    #
+    #     if scale_back_result:
+    #         traces = self.scale_back(traces)
+    #         if round_result:
+    #             traces = np.around(traces)
+    #
+    #     # [n_steps, n_traces, batch_size, nb_features] -> [batch_size, n_traces, n_steps, nb_features]
+    #     traces = np.transpose(traces, (2, 1, 0, 3))
+    #
+    #     if add_timesteps:
+    #         timespan = np.arange(0, (n_steps + 1) * self.timestep, self.timestep)
+    #         timespan = np.tile(timespan, reps=(batch_size, n_traces, 1))
+    #         timespan = timespan[..., np.newaxis]
+    #         traces = np.concatenate([timespan, traces], axis=-1)
+    #
+    #     return traces
 
     def generate_traces(
             self,
@@ -378,22 +442,19 @@ class StochNet:
             n_steps,
             n_traces=1,
             curr_state_rescaled=False,
-            scale_back_result=True,
             round_result=False,
             add_timesteps=False,
     ):
         batch_size, *state_shape = curr_state_values.shape
         traces = np.zeros((n_steps + 1, n_traces, batch_size, *state_shape))
 
-        if not curr_state_rescaled:
-            curr_state_values = self.rescale(curr_state_values)
+        # zero step
+        traces[0] = self.scale_back(curr_state_values) if curr_state_rescaled else curr_state_values
 
-        traces[0] = curr_state_values
-
+        # first step: make branch of n_traces samples to continue with
         next_state_values = self.next_state(
                 curr_state_values,
-                curr_state_rescaled=True,
-                scale_back_result=False,
+                curr_state_rescaled=curr_state_rescaled,
                 round_result=False,
                 n_samples=n_traces,
             )
@@ -403,22 +464,18 @@ class StochNet:
             next_state_values = next_state_values.reshape((-1, *state_shape))
             next_state_values = self.next_state(
                 next_state_values,
-                curr_state_rescaled=True,
-                scale_back_result=False,
+                curr_state_rescaled=False,
                 round_result=False,
                 n_samples=1,
             )
             next_state_values = next_state_values.reshape((-1, batch_size, *state_shape))
-            # next_state_values = np.maximum(0, next_state_values)
             traces[step] = next_state_values
+
+        if round_result:
+            traces = np.around(traces)
 
         # [n_steps, n_traces, batch_size, 1, nb_features] -> [n_steps, n_traces, batch_size, nb_features]
         traces = np.squeeze(traces, axis=-2)
-
-        if scale_back_result:
-            traces = self.scale_back(traces)
-            if round_result:
-                traces = np.around(traces)
 
         # [n_steps, n_traces, batch_size, nb_features] -> [batch_size, n_traces, n_steps, nb_features]
         traces = np.transpose(traces, (2, 1, 0, 3))

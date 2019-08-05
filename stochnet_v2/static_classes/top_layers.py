@@ -598,14 +598,20 @@ class MixtureOutputLayer(RandomVariableOutputLayer):
         for component in self.components:
             self._number_of_output_neurons += component.number_of_output_neurons
 
-    def add_layer_on_top_(self, base):
+    def add_layer_on_top(self, base):
+        # return self._add_layer_on_top_share(base)
+        return self._add_layer_on_top_individual(base)
+        # return self._add_layer_on_top_individual_cat(base)
+
+    def _add_layer_on_top_share(self, base):
+        # all components onto the same base
         with tf.variable_scope(self.name_scope):
             categorical_layer = self.categorical.add_layer_on_top(base)
             components_layers = [component.add_layer_on_top(base) for component in self.components]
             mixture_layers = [categorical_layer] + components_layers
             return tf.keras.layers.Concatenate(axis=-1)(mixture_layers)
 
-    def add_layer_on_top(self, base):
+    def _add_layer_on_top_individual(self, base):
         # individual slice for each component
         n_slices = len(self.components) + 1
         slice_dim = base.shape.as_list()[-1]
@@ -636,6 +642,43 @@ class MixtureOutputLayer(RandomVariableOutputLayer):
                 print(f'component {i+1}: {component.__class__.__name__} '
                       f'from {cat_slice_size + i * slice_size} for {slice_size} - {component_slice.shape.as_list()}')
                 component_output = component.add_layer_on_top(component_slice)
+                components_outputs.append(component_output)
+
+            mixture_outputs = [categorical_output] + components_outputs
+            return tf.keras.layers.Concatenate(axis=-1)(mixture_outputs)
+
+    def _add_layer_on_top_individual_cat(self, base):
+        # separate slice for categorical, shared for other
+        print(f'base shape: {base.shape}')
+        slice_dim = base.shape.as_list()[-1]
+        n_slices = len(self.components) + 1
+        # slice_size = slice_dim // n_slices
+        # cat_slice_size = slice_size + slice_dim % n_slices
+        cat_slice_size = slice_dim // n_slices * 2
+
+        components_outputs = []
+
+        with tf.variable_scope(self.name_scope):
+
+            categorical_slice = tf.slice(
+                base,
+                [0, 0],
+                [-1, cat_slice_size],
+            )
+            print(f'categorical: slice '
+                  f'from 0 for {cat_slice_size} - {categorical_slice.shape.as_list()}')
+            categorical_output = self.categorical.add_layer_on_top(categorical_slice)
+
+            components_slice = tf.slice(
+                base,
+                [0, cat_slice_size],
+                [-1, slice_dim - cat_slice_size],
+            )
+            print(f'components slice: '
+                  f'from {cat_slice_size} for {slice_dim - cat_slice_size} - {components_slice.shape.as_list()}')
+
+            for i, component in enumerate(self.components):
+                component_output = component.add_layer_on_top(components_slice)
                 components_outputs.append(component_output)
 
             mixture_outputs = [categorical_output] + components_outputs
