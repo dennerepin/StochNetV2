@@ -175,8 +175,7 @@ if __name__ == '__main__':
     CRN_class = getattr(CRN_module, model_name)
     settings = CRN_class.get_initial_settings(nb_settings)
     settings_fp = os.path.join(dataset_explorer.dataset_folder, 'settings.npy')
-    print(f">>> Generated initial settings shape: {settings.shape}")
-    print(f">>> Saving settings to {settings_fp}")
+
     np.save(settings_fp, settings)
     nb_settings = settings.shape[0]
 
@@ -207,96 +206,3 @@ if __name__ == '__main__':
         f.write(msg)
 
     print(msg)
-
-
-# python stochnet_v2/dataset/dataset_simulation.py 1000 10 50 0.2 20 '/home/dn/Documents/tmp/tmp_simulations' 'EGFR'
-
-# V1 for multiplrocess simulations:
-#
-# def perform_simulations(
-#         model_name,
-#         nb_settings,
-#         nb_trajectories,
-#         timestep,
-#         endtime,
-#         dataset_folder,
-#         prefix='partial_',
-# ):
-#     settings_fp = os.path.join(dataset_folder, 'settings.npy')
-#     settings = np.load(settings_fp)
-#
-#     count = multiprocessing.cpu_count() // 2
-#     print(" ===== CPU Cores used for simulations: %s =====" % count)
-#     pool = multiprocessing.Pool(processes=count)
-#
-#     id_numbers = range(nb_settings)
-#
-#     task = partial(
-#         single_task,
-#         model_name=model_name,
-#         endtime=endtime,
-#         timestep=timestep,
-#         settings=settings,
-#         nb_trajectories=nb_trajectories,
-#         dataset_folder=dataset_folder,
-#         prefix=prefix)
-#
-#     pool.map(task, id_numbers)
-#     return
-#
-#
-# def single_task(
-#         id_number,
-#         model_name,
-#         endtime,
-#         timestep,
-#         settings,
-#         nb_trajectories,
-#         dataset_folder,
-#         prefix,
-# ):
-#     CRN_module = import_module("stochnet_v2.CRN_models." + model_name)
-#     CRN_class = getattr(CRN_module, model_name)
-#     CRN = CRN_class(endtime, timestep)
-#
-#     single_simulation(
-#         CRN,
-#         settings[id_number],
-#         nb_trajectories,
-#         dataset_folder,
-#         prefix,
-#         id_number
-#     )
-#
-#
-# def single_simulation(
-#         CRN,
-#         initial_values,
-#         nb_trajectories,
-#         dataset_folder,
-#         prefix,
-#         id_number,
-# ):
-#
-#     CRN.set_species_initial_value(initial_values)
-#     trajectories = CRN.run(number_of_trajectories=nb_trajectories,
-#                            solver=StochKitSolver,
-#                            show_labels=False)
-#     data = np.array(trajectories)
-#     save_simulation_data(data, dataset_folder, prefix, id_number)
-#
-#
-# def save_simulation_data(
-#         data,
-#         dataset_folder,
-#         prefix,
-#         id_number,
-# ):
-#     partial_dataset_filename = str(prefix) + str(id_number) + '.npy'
-#     partial_dataset_filepath = os.path.join(dataset_folder,
-#                                             partial_dataset_filename)
-#     print("Saving to partial_dataset_filepath: %s" % partial_dataset_filepath)
-#     with open(partial_dataset_filepath, 'wb') as f:
-#         np.save(f, data)
-#     print("Saved.")
-#     return
