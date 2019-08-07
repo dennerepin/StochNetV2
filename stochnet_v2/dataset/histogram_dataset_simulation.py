@@ -46,16 +46,16 @@ if __name__ == '__main__':
     np.random.seed(random_seed)
 
     project_explorer = ProjectFileExplorer(project_folder)
-    source_dataset_explorer = project_explorer.get_dataset_file_explorer(
+    dataset_explorer = project_explorer.get_dataset_file_explorer(
         source_dataset_timestep,
         source_dataset_id
     )
 
     settings = get_histogram_settings(
         nb_histogram_settings,
-        source_dataset_explorer.train_fp
+        dataset_explorer.train_fp
     )
-    with open(source_dataset_explorer.histogram_settings_fp, 'wb') as file:
+    with open(dataset_explorer.histogram_settings_fp, 'wb') as file:
         np.save(file, settings)
 
     histogram_dataset = build_simulation_dataset(
@@ -64,18 +64,18 @@ if __name__ == '__main__':
         nb_trajectories,
         source_dataset_timestep,
         endtime,
-        source_dataset_explorer.dataset_folder,
+        dataset_explorer.dataset_folder,
         prefix='histogram_partial_',
         how='stack',
-        settings_filename=os.path.basename(source_dataset_explorer.histogram_settings_fp),
+        settings_filename=os.path.basename(dataset_explorer.histogram_settings_fp),
     )
-    with open(source_dataset_explorer.histogram_dataset_fp, 'wb') as file:
+    with open(dataset_explorer.histogram_dataset_fp, 'wb') as file:
         np.save(file, histogram_dataset)
 
     end = time()
     execution_time = end - start
 
-    with open(source_dataset_explorer.log_fp, 'a') as file:
+    with open(dataset_explorer.log_fp, 'a') as file:
         file.write(
             f"Simulating {nb_trajectories} {model_name} histogram trajectories "
             f"for {nb_histogram_settings} different settings until {endtime} "

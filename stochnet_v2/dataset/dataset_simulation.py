@@ -52,8 +52,10 @@ def build_simulation_dataset(
 def concatenate_simulations(nb_settings, dataset_folder, prefix='partial_'):
     for i in tqdm(range(nb_settings)):
         partial_dataset_filename = str(prefix) + str(i) + '.npy'
-        partial_dataset_filepath = os.path.join(dataset_folder,
-                                                partial_dataset_filename)
+        partial_dataset_filepath = os.path.join(
+            dataset_folder,
+            partial_dataset_filename
+        )
         with open(partial_dataset_filepath, 'rb') as f:
             partial_dataset = np.load(f)
         if i == 0:
@@ -70,8 +72,10 @@ def concatenate_simulations(nb_settings, dataset_folder, prefix='partial_'):
 def stack_simulations(nb_settings, dataset_folder, prefix='partial_'):
     for i in tqdm(range(nb_settings)):
         partial_dataset_filename = str(prefix) + str(i) + '.npy'
-        partial_dataset_filepath = os.path.join(dataset_folder,
-                                                partial_dataset_filename)
+        partial_dataset_filepath = os.path.join(
+            dataset_folder,
+            partial_dataset_filename
+        )
         with open(partial_dataset_filepath, 'rb') as f:
             partial_dataset = np.load(f)
         if i == 0:
