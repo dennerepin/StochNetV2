@@ -57,9 +57,9 @@ class BaseCRNModel(gillespy.Model):
         return len(cls.get_species_names())
 
     @classmethod
-    def get_histogram_bounds(cls):
-        species = cls.get_species()
-        species_for_histogram = cls.get_species_for_histogram()
+    def get_histogram_bounds(cls, species_names_list=None):
+        species = cls.get_species_names()
+        species_for_histogram = species_names_list or cls.get_species_for_histogram()
         initial_state = cls.get_initial_state()
         histogram_bounds = []
         for s in species_for_histogram:

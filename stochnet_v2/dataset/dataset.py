@@ -29,7 +29,6 @@ class DataTransformer:
         self._scaler = None
         self.scaler_is_fitted = False
         self.scaler_positivity = None
-        self.rescaled = False
         self.dtype = dtype
 
         self.read_data(dataset_address)
@@ -84,19 +83,6 @@ class DataTransformer:
                     self.labels.values()
                 ))
 
-    def rescale(self, positivity=True, slice_size=None):
-        if self.rescaled is False:
-            if self.scaler_is_fitted is False:
-                self._fit_scaler(positivity, slice_size)
-            self._apply_scaler(slice_size)
-
-        elif self.scaler_positivity != positivity:
-            if self.rescaled:
-                self.scale_back(slice_size)
-            self._create_scaler(positivity)
-            self._fit_scaler(positivity, slice_size)
-            self._apply_scaler(slice_size)
-
     def _create_scaler(self, positivity):
         self.scaler_positivity = positivity
         if positivity is True:
@@ -104,76 +90,49 @@ class DataTransformer:
             self._scaler = MinMaxScaler(feature_range=(eps, 1))
         else:
             self._scaler = StandardScaler()
+        self.scaler_is_fitted = False
 
-    def _fit_scaler(self, positivity=True, slice_size=None):
-        if self._scaler is None:
+    def _fit_scaler(self, positivity=False, slice_size=None):
+
+        if (self._scaler is None) or (self.scaler_positivity != positivity):
             self._create_scaler(positivity)
 
-        if slice_size is None:
-            self._scaler.fit(self.data.reshape(-1, self.nb_features))
-        else:
-            n_slices = self.nb_trajectories // slice_size
+        if not self.scaler_is_fitted:
 
-            for i in tqdm(range(n_slices)):
-                data_slice = self.data[i * slice_size: (i + 1) * slice_size, ...]
-                data_slice = data_slice.reshape(-1, self.nb_features)
-                self._scaler.partial_fit(data_slice)
+            print(f"Fitting scaler, positivity={positivity}")
 
-            if self.nb_trajectories % slice_size != 0:
-                data_slice = self.data[n_slices * slice_size:, ...]
-                data_slice = data_slice.reshape(-1, self.nb_features)
-                self._scaler.partial_fit(data_slice)
-
-        self.scaler_is_fitted = True
-
-    def _apply_scaler(self, slice_size=None):
-        if slice_size is None:
-            flat_data = self.data.reshape(-1, self.nb_features)
-            flat_data = self._scaler.transform(flat_data)
-            self.data = flat_data.reshape(self.nb_trajectories, self.nb_timesteps, self.nb_features)
-        else:
-            n_slices = self.nb_trajectories // slice_size
-
-            for i in tqdm(range(n_slices)):
-                data_slice = self.data[i * slice_size: (i + 1) * slice_size, ...]
-                data_slice = data_slice.reshape(-1, self.nb_features)
-                data_slice = self._scaler.transform(data_slice)
-                self.data[i * slice_size: (i + 1) * slice_size, ...] = \
-                    data_slice.reshape(-1, self.nb_timesteps, self.nb_features)
-
-            if self.nb_trajectories % slice_size != 0:
-                data_slice = self.data[n_slices * slice_size:, ...]
-                data_slice = data_slice.reshape(-1, self.nb_features)
-                data_slice = self._scaler.transform(data_slice)
-                self.data[n_slices * slice_size:, ...] = \
-                    data_slice.reshape(-1, self.nb_timesteps, self.nb_features)
-
-        self.rescaled = True
-
-    def scale_back(self, slice_size=None):
-        if self.rescaled:
             if slice_size is None:
-                flat_data = self.data.reshape(-1, self.nb_features)
-                flat_data = self._scaler.inverse_transform(flat_data)
-                self.data = flat_data.reshape(self.nb_trajectories, self.nb_timesteps, self.nb_features)
+                self._scaler.fit(self.data.reshape(-1, self.nb_features))
             else:
                 n_slices = self.nb_trajectories // slice_size
 
                 for i in tqdm(range(n_slices)):
                     data_slice = self.data[i * slice_size: (i + 1) * slice_size, ...]
                     data_slice = data_slice.reshape(-1, self.nb_features)
-                    data_slice = self._scaler.inverse_transform(data_slice)
-                    self.data[i * slice_size: (i + 1) * slice_size, ...] = \
-                        data_slice.reshape(-1, self.nb_timesteps, self.nb_features)
+                    self._scaler.partial_fit(data_slice)
 
                 if self.nb_trajectories % slice_size != 0:
                     data_slice = self.data[n_slices * slice_size:, ...]
                     data_slice = data_slice.reshape(-1, self.nb_features)
-                    data_slice = self._scaler.inverse_transform(data_slice)
-                    self.data[n_slices * slice_size:, ...] = \
-                        data_slice.reshape(-1, self.nb_timesteps, self.nb_features)
+                    self._scaler.partial_fit(data_slice)
 
-            self.rescaled = False
+            self.scaler_is_fitted = True
+
+    def rescale(self, data):
+        # return self.scaler.transform(data)
+        if isinstance(self.scaler, StandardScaler):
+            data = (data - self.scaler.mean_) / self.scaler.scale_
+        elif isinstance(self.scaler, MinMaxScaler):
+            data = (data * self.scaler.scale_) + self.scaler.min_
+        return data
+
+    def scale_back(self, data):
+        # return self.scaler.inverse_transform(data)
+        if isinstance(self.scaler, StandardScaler):
+            data = data * self.scaler.scale_ + self.scaler.mean_
+        elif isinstance(self.scaler, MinMaxScaler):
+            data = (data - self.scaler.min_) / self.scaler.scale_
+        return data
 
     def _shuffle_data(self):
         np.random.shuffle(self.data)
@@ -200,6 +159,7 @@ class DataTransformer:
             trajectories,
             nb_past_timesteps,
             slice_size=None,
+            rescale=False,
     ):
         self._check_nb_past_timesteps(nb_past_timesteps)
         nb_trajectories = trajectories.shape[0]
@@ -223,6 +183,10 @@ class DataTransformer:
                     trajectories[slice_size * i: slice_size * (i + 1)],
                     nb_past_timesteps,
                 )
+            if rescale:
+                x_data = self.rescale(x_data)
+                y_data = self.rescale(y_data)
+
             yield x_data, y_data
 
     def _train_test_generators(
@@ -230,18 +194,21 @@ class DataTransformer:
             nb_past_timesteps,
             test_fraction=0.2,
             slice_size=None,
+            rescale=False,
     ):
         n_train_trajectories = int((1. - test_fraction) * self.nb_trajectories)
 
         train_gen = self._transitions_generator(
             self.data[:n_train_trajectories],
             nb_past_timesteps,
-            slice_size
+            slice_size,
+            rescale,
         )
         test_gen = self._transitions_generator(
             self.data[n_train_trajectories:],
             nb_past_timesteps,
-            slice_size
+            slice_size,
+            rescale,
         )
         return train_gen, test_gen
 
@@ -260,9 +227,7 @@ class DataTransformer:
             self.drop_timestamps()
 
         if rescale is True:
-            self.rescale(positivity, slice_size)
-        elif rescale is False and self.rescaled is True:
-            self.scale_back(slice_size)
+            self._fit_scaler(positivity, slice_size)
 
         if shuffle is True:
             self._shuffle_data()
@@ -271,8 +236,9 @@ class DataTransformer:
             nb_past_timesteps,
             test_fraction,
             slice_size,
+            rescale,
         )
-        
+
     def _check_nb_past_timesteps(self, nb_past_timesteps):
         if nb_past_timesteps + 1 > self.nb_timesteps:
             raise ValueError('Too many past timesteps.')

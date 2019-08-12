@@ -356,7 +356,7 @@ class StochNet:
             round_result=False,
             n_samples=1,
     ):
-        # curr_state_values ~ [batch_size, 1, nb_features]
+        # curr_state_values ~ [n_settings, 1, nb_features]
         if not curr_state_rescaled:
             curr_state_values = self.rescale(curr_state_values)
 
@@ -368,7 +368,7 @@ class StochNet:
             if round_result:
                 next_state = np.around(next_state)
 
-        # next_state ~ [n_samples, batch_size, 1, nb_features]
+        # next_state ~ [n_samples, n_settings, 1, nb_features]
         return next_state
 
     def generate_traces(
@@ -381,8 +381,8 @@ class StochNet:
             round_result=False,
             add_timesteps=False,
     ):
-        batch_size, *state_shape = curr_state_values.shape
-        traces = np.zeros((n_steps + 1, n_traces, batch_size, *state_shape))
+        n_settings, *state_shape = curr_state_values.shape
+        traces = np.zeros((n_steps + 1, n_traces, n_settings, *state_shape))
 
         if not curr_state_rescaled:
             curr_state_values = self.rescale(curr_state_values)
@@ -398,20 +398,52 @@ class StochNet:
             )
         traces[1] = next_state_values
 
-        for step in range(2, n_steps + 1):
-            next_state_values = next_state_values.reshape((-1, *state_shape))
-            next_state_values = self.next_state(
-                next_state_values,
-                curr_state_rescaled=True,
-                scale_back_result=False,
-                round_result=False,
-                n_samples=1,
-            )
-            next_state_values = next_state_values.reshape((-1, batch_size, *state_shape))
-            # next_state_values = np.maximum(0, next_state_values)
-            traces[step] = next_state_values
+        # for step in range(2, n_steps + 1):
+        #     next_state_values = next_state_values.reshape((-1, *state_shape))
+        #     next_state_values = self.next_state(
+        #         next_state_values,
+        #         curr_state_rescaled=True,
+        #         scale_back_result=False,
+        #         round_result=False,
+        #         n_samples=1,
+        #     )
+        #     next_state_values = next_state_values.reshape((-1, batch_size, *state_shape))
+        #     # next_state_values = np.maximum(0, next_state_values)
+        #     traces[step] = next_state_values
 
-        # [n_steps, n_traces, batch_size, 1, nb_features] -> [n_steps, n_traces, batch_size, nb_features]
+        iterate_through_traces = n_traces <= n_settings
+        print(f'iterate_through_traces: {iterate_through_traces}')
+
+        if iterate_through_traces:
+            for trace_idx in range(n_traces):
+                state_values = next_state_values[trace_idx]
+                for step in range(2, n_steps + 1):
+                    state_values = self.next_state(
+                        state_values,
+                        curr_state_rescaled=False,
+                        scale_back_result=False,
+                        round_result=False,
+                        n_samples=1,
+                    )
+                    # state_values = np.squeeze(state_values, 0)
+                    # traces[step, trace_idx] = state_values
+                    traces[step, trace_idx] = state_values[0]
+        else:
+            for setting_idx in range(n_settings):
+                state_values = next_state_values[:, setting_idx]
+                for step in range(2, n_steps + 1):
+                    state_values = self.next_state(
+                        state_values,
+                        curr_state_rescaled=False,
+                        scale_back_result=False,
+                        round_result=False,
+                        n_samples=1,
+                    )
+                    # state_values = np.squeeze(state_values, 0)
+                    # traces[step, :, setting_idx] = state_values
+                    traces[step, :, setting_idx] = state_values[0]
+
+        # [n_steps, n_settings, batch_size, 1, nb_features] -> [n_steps, n_traces, n_settings, nb_features]
         traces = np.squeeze(traces, axis=-2)
 
         if scale_back_result:
@@ -419,7 +451,7 @@ class StochNet:
             if round_result:
                 traces = np.around(traces)
 
-        # [n_steps, n_traces, batch_size, nb_features] -> [batch_size, n_traces, n_steps, nb_features]
+        # [n_steps, n_traces, n_settings, nb_features] -> [n_settings, n_traces, n_steps, nb_features]
         traces = np.transpose(traces, (2, 1, 0, 3))
 
         if add_timesteps:
