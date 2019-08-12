@@ -9,9 +9,9 @@ from importlib import import_module
 from tqdm import tqdm
 from time import time
 
-path = os.path.dirname(__file__)
-sys.path.append(os.path.join(path, '../..'))
-from stochnet_v2.utils.file_organisation import ProjectFileExplorer
+# path = os.path.dirname(__file__)
+# sys.path.append(os.path.join(path, '../..'))
+# from stochnet_v2.utils.file_organisation import ProjectFileExplorer
 
 
 def build_simulation_dataset(
@@ -160,6 +160,9 @@ def save_simulation_data(
 
 
 if __name__ == '__main__':
+    path = os.path.dirname(__file__)
+    sys.path.append(os.path.join(path, '../..'))
+    from stochnet_v2.utils.file_organisation import ProjectFileExplorer
 
     print(">>> START")
     start = time()
