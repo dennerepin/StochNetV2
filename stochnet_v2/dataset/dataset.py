@@ -402,59 +402,58 @@ class BaseDataset(metaclass=abc.ABCMeta):
     def __init__(
             self,
             batch_size,
-            prefetch_size=None,
-            shuffle=False,
-            shuffle_buffer_size=100,
+            shuffle=True,
+            drop_remainder=True,
     ):
         self._batch_size = batch_size
-        self._prefetch_size = prefetch_size or -1
-
         self._shuffle = shuffle
-        self._shuffle_buffer_size = shuffle_buffer_size
+        self._drop_remainder = drop_remainder
 
     @property
     def batch_size(self):
         return self._batch_size
 
-    @property
-    def prefetch_size(self):
-        return self._prefetch_size
-
-    def __iter__(self):
-        config = tf.compat.v1.ConfigProto(device_count={'GPU': 0})
-        graph = tf.Graph()
-        dataset = self.create_dataset(graph)
-        with tf.compat.v1.Session(graph=graph, config=config) as session:
-            dataset_iter = tf.compat.v1.data.make_one_shot_iterator(dataset)
-            next_element = dataset_iter.get_next()
-            while True:
-                try:
-                    yield session.run(next_element)
-                except tf.errors.OutOfRangeError:
-                    break
-
     @abc.abstractmethod
-    def _create_dataset(self):
+    def __iter__(self):
         pass
 
-    def create_dataset(self, graph=None):
-        if graph is not None:
-            with graph.as_default():
-                dataset = self._create_dataset()
-                # if self._shuffle is True:
-                #     dataset = dataset.shuffle(buffer_size=self._shuffle_buffer_size)
-                dataset = dataset.batch(self._batch_size, drop_remainder=True)
-                if self._shuffle is True:
-                    dataset = dataset.shuffle(buffer_size=self._shuffle_buffer_size)
-                dataset = dataset.prefetch(self._prefetch_size)
-        else:
-            dataset = self._create_dataset()
-            if self._shuffle is True:
-                dataset = dataset.shuffle(buffer_size=self._shuffle_buffer_size)
-            dataset = dataset.batch(self._batch_size, drop_remainder=True)
-            dataset = dataset.prefetch(self._prefetch_size)
 
-        return dataset
+class HDF5Dataset(BaseDataset):
+
+    def __init__(
+            self,
+            data_file_path,
+            batch_size,
+            shuffle=True,
+    ):
+        self._data_file_path = data_file_path
+
+        super().__init__(
+            batch_size,
+            shuffle=shuffle,
+        )
+
+    def __iter__(self):
+        bs = self.batch_size
+
+        with h5py.File(self._data_file_path, 'r', libver='latest') as df:
+            x = df['x']
+            y = df['y']
+            n_examples = x.shape[0]
+            n_batches = n_examples // bs
+
+            batch_idxs = np.arange(0, n_batches)
+
+            if self._shuffle:
+                np.random.shuffle(batch_idxs)
+
+            for batch_idx in batch_idxs:
+                start = batch_idx * bs
+                end = (batch_idx + 1) * bs
+                yield x[start:end], y[start:end]
+
+            if self._drop_remainder is False:
+                yield x[n_batches * bs:-1], y[n_batches * bs:-1]
 
 
 class TFRecordsDataset(BaseDataset):
@@ -464,7 +463,7 @@ class TFRecordsDataset(BaseDataset):
             records_paths,
             batch_size,
             prefetch_size=None,
-            shuffle=False,
+            shuffle=True,
             shuffle_buffer_size=100,
             nb_past_timesteps=None,
             nb_features=None,
@@ -482,12 +481,30 @@ class TFRecordsDataset(BaseDataset):
         else:
             self._parse_record = self._parse_record_unknown_lengths
 
+        self._prefetch_size = prefetch_size or -1
+        self._shuffle_buffer_size = shuffle_buffer_size
+
         super().__init__(
             batch_size,
-            prefetch_size=prefetch_size,
             shuffle=shuffle,
-            shuffle_buffer_size=shuffle_buffer_size,
         )
+
+    def __iter__(self):
+        config = tf.compat.v1.ConfigProto(device_count={'GPU': 0})
+        graph = tf.Graph()
+        dataset = self.create_dataset(graph)
+        with tf.compat.v1.Session(graph=graph, config=config) as session:
+            dataset_iter = tf.compat.v1.data.make_one_shot_iterator(dataset)
+            next_element = dataset_iter.get_next()
+            while True:
+                try:
+                    yield session.run(next_element)
+                except tf.errors.OutOfRangeError:
+                    break
+
+    @property
+    def prefetch_size(self):
+        return self._prefetch_size
 
     def _parse_record_known_lengths(
             self,
@@ -511,7 +528,7 @@ class TFRecordsDataset(BaseDataset):
     def _parse_record_unknown_lengths(
             raw_record,
     ):
-        features = tf.parse_single_example(
+        features = tf.io.parse_single_example(
             raw_record,
             features={
                 'x': tf.io.VarLenFeature(tf.float32),
@@ -524,6 +541,24 @@ class TFRecordsDataset(BaseDataset):
         y = tf.sparse.to_dense(features['y'])
 
         return x, y
+
+    def create_dataset(self, graph=None):
+        if graph is not None:
+            with graph.as_default():
+                dataset = self._create_dataset()
+                dataset = dataset.batch(self._batch_size, drop_remainder=self._drop_remainder)
+                if self._shuffle is True:
+                    dataset = dataset.shuffle(buffer_size=self._shuffle_buffer_size)
+                dataset = dataset.prefetch(self._prefetch_size)
+        else:
+            dataset = self._create_dataset()
+            # TODO: move shuffle after batching
+            if self._shuffle is True:
+                dataset = dataset.shuffle(buffer_size=self._shuffle_buffer_size)
+            dataset = dataset.batch(self._batch_size, drop_remainder=self._drop_remainder)
+            dataset = dataset.prefetch(self._prefetch_size)
+
+        return dataset
 
     def _create_dataset(self):
         dataset = tf.data.TFRecordDataset(self._records_paths)

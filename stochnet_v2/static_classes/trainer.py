@@ -6,6 +6,7 @@ from collections import namedtuple
 from time import time
 
 from stochnet_v2.dataset.dataset import TFRecordsDataset
+from stochnet_v2.dataset.dataset import HDF5Dataset
 from stochnet_v2.utils.util import maybe_create_dir
 from stochnet_v2.utils.util import copy_graph
 from stochnet_v2.utils.util import get_transformed_tensor
@@ -87,6 +88,7 @@ class Trainer:
             batch_size=_DEFAULT_BATCH_SIZE,
             n_epochs=_DEFAULT_NUMBER_OF_EPOCHS,
             ckpt_path=None,
+            dataset_kind='tfrecord',
     ):
         save_dir = save_dir or model.model_explorer.model_folder
 
@@ -120,6 +122,7 @@ class Trainer:
                 batch_size=batch_size,
                 checkpoints_save_dir=checkpoints_save_dir,
                 tensorboard_log_dir=tensorboard_log_dir,
+                dataset_kind=dataset_kind,
             )
 
             model.restore_from_checkpoint(best_loss_checkpoint_path)
@@ -197,9 +200,22 @@ class Trainer:
             )
             return train_ds, test_ds
 
+        if kind == 'hdf5':
+            train_ds = HDF5Dataset(
+                model.dataset_explorer.train_rescaled_fp,
+                batch_size=batch_size,
+                shuffle=True,
+            )
+            test_ds = HDF5Dataset(
+                model.dataset_explorer.test_rescaled_fp,
+                batch_size=batch_size,
+                shuffle=True,
+            )
+            return train_ds, test_ds
+
         raise ValueError(
             f"Could not recognize the 'kind' key: {kind}. "
-            f"Should be one of ['tfrecord', ]."
+            f"Should be one of ['tfrecord', 'hdf5']."
         )
 
     def _train(
@@ -214,6 +230,7 @@ class Trainer:
             batch_size,
             checkpoints_save_dir,
             tensorboard_log_dir,
+            dataset_kind,
     ):
         global_vars = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.GLOBAL_VARIABLES)
         trainable_vars = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES)
@@ -276,7 +293,7 @@ class Trainer:
         train_dataset, test_dataset = self._get_datasets(
             model,
             batch_size=batch_size,
-            kind='tfrecord',
+            kind=dataset_kind,
         )
 
         regular_checkpoints_saver.save(session, get_regular_checkpoint_path(global_step))

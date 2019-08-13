@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import numpy as np
 import os
 import shutil
@@ -42,3 +43,38 @@ def graph_def_to_graph(graph_def):
     with graph.as_default():
         tf.import_graph_def(graph_def, name='')
     return graph
+
+
+def plot_trace(trace, show=True, labels=None, **kwargs):
+    n_species = trace.shape[-1] - 1
+    cmap = get_cmap(n_species+1)
+    for i in range(n_species):
+        lab = labels[i] if labels else None
+        plt.plot(trace[:, i+1], c=cmap(i), label=lab, **kwargs)
+    if show is True:
+        plt.show()
+
+
+def plot_traces(traces, show=False, labels=None, **kwargs):
+    if len(traces.shape) == 2:
+        plot_trace(traces, show=False, labels=labels, **kwargs)
+    else:
+        for i, trace in enumerate(traces):
+            plot_trace(trace, show=False, labels=labels if i == 0 else None, **kwargs)
+    if show is True:
+        plt.show()
+
+
+def random_pick_traces(data_shape, n):
+    return np.random.choice(data_shape[0], n)
+
+
+def plot_random_traces(data, n, show=False, **kwargs):
+    for i in random_pick_traces(data.shape, n):
+        plot_trace(data[i], show=show, **kwargs)
+
+
+def get_cmap(n, name='hsv'):
+    """Returns a function that maps each index in 0, 1, ..., n-1 to a distinct
+    RGB color; the keyword argument name must be a standard mpl colormap name."""
+    return plt.cm.get_cmap(name, n)

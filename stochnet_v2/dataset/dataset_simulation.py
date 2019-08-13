@@ -106,7 +106,7 @@ def perform_simulations(
     CRN_class = getattr(CRN_module, model_name)
     CRN = CRN_class(endtime, timestep)
 
-    count = multiprocessing.cpu_count() // 2
+    count = (multiprocessing.cpu_count() // 3) * 2 + 1
     print(" ===== CPU Cores used for simulations: %s =====" % count)
     pool = multiprocessing.Pool(processes=count)
 
@@ -175,8 +175,7 @@ if __name__ == '__main__':
     model_name = str(sys.argv[7])
 
     project_explorer = ProjectFileExplorer(project_folder)
-    dataset_explorer = project_explorer.get_dataset_file_explorer(timestep,
-                                                                  dataset_id)
+    dataset_explorer = project_explorer.get_dataset_file_explorer(timestep, dataset_id)
 
     CRN_module = import_module("stochnet_v2.CRN_models." + model_name)
     CRN_class = getattr(CRN_module, model_name)
@@ -216,3 +215,4 @@ if __name__ == '__main__':
 
 
 # python stochnet_v2/dataset/dataset_simulation.py 1000 10 50 0.2 20 '/home/dn/Documents/tmp/tmp_simulations' 'EGFR'
+# python stochnet_v2/dataset/dataset_simulation.py 1 40 40 400 10000 '/home/dn/DATA/Gene' 'Gene'

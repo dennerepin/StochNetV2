@@ -84,3 +84,4 @@ if __name__ == '__main__':
 
 
 # python stochnet_v2/dataset/histogram_dataset_simulation.py '/home/dn/Documents/tmp/tmp_simulations' 0.5 3 20 1000 30 EGFR 11
+# python stochnet_v2/dataset/histogram_dataset_simulation.py '/home/dn/DATA/Gene' 400 1 25 1000 10000 'Gene' 11

@@ -44,6 +44,8 @@ class DatasetFileExplorer:
             str(self.dataset_id),
         )
         maybe_create_dir(self.dataset_folder)
+
+        self.settings_fp = os.path.join(self.dataset_folder, 'settings.npy')
         self.log_fp = os.path.join(self.dataset_folder, 'log.txt')
         self.dataset_fp = os.path.join(self.dataset_folder, 'dataset.npy')
 
@@ -84,6 +86,8 @@ class ModelFileExplorer:
         maybe_create_dir(self.model_folder)
         self.frozen_graph_fp = os.path.join(self.model_folder, 'frozen_graph.pb')
         self.graph_keys_fp = os.path.join(self.model_folder, 'graph_keys.json')
+        self.mixture_config_path = os.path.join(self.model_folder, 'mixture_config.json')
+        self.body_config_path = os.path.join(self.model_folder, 'body_config.json')
 
 
 class HistogramFileExplorer:

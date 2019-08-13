@@ -599,8 +599,8 @@ class MixtureOutputLayer(RandomVariableOutputLayer):
             self._number_of_output_neurons += component.number_of_output_neurons
 
     def add_layer_on_top(self, base):
-        # return self._add_layer_on_top_share(base)
-        return self._add_layer_on_top_individual(base)
+        return self._add_layer_on_top_share(base)
+        # return self._add_layer_on_top_individual(base)
         # return self._add_layer_on_top_individual_cat(base)
 
     def _add_layer_on_top_share(self, base):
@@ -652,8 +652,6 @@ class MixtureOutputLayer(RandomVariableOutputLayer):
         print(f'base shape: {base.shape}')
         slice_dim = base.shape.as_list()[-1]
         n_slices = len(self.components) + 1
-        # slice_size = slice_dim // n_slices
-        # cat_slice_size = slice_size + slice_dim % n_slices
         cat_slice_size = slice_dim // n_slices * 2
 
         components_outputs = []
