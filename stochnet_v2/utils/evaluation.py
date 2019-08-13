@@ -1,7 +1,11 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import multiprocessing
 import os
+from functools import partial
 from importlib import import_module
+from time import time
+from tqdm import tqdm
 
 from stochnet_v2.static_classes.model import StochNet
 from stochnet_v2.utils.file_organisation import ProjectFileExplorer
@@ -149,14 +153,15 @@ def _iou_distance(histograms_1, histograms_2):
 
 
 def get_distance(
+        time_lag,
         data_1,
         data_2,
-        time_lag,
         n_bins=100,
         target_species_idxs=None,
         histogram_bounds=None,
         with_timestamps=True,
-        kind='hist',
+        kind='l1',
+        return_histograms=True,
 ):
     if histogram_bounds is None:
         bounds_1 = np.array(_get_data_bounds(data_1, with_timestamps))
@@ -184,16 +189,17 @@ def get_distance(
         histogram_bounds=histogram_bounds,
         with_timestamps=with_timestamps,
     )
-    if kind == 'hist':
+    if kind == 'l1':
         distance_fn = _histogram_distance
     elif kind == 'iou':
         distance_fn = _iou_distance
     else:
-        raise ValueError("`kind` parameter unrecognized: {kind}. Should be one of: 'hist', 'iou'")
+        raise ValueError("`kind` parameter unrecognized: {kind}. Should be one of: 'l1', 'iou'")
 
     distance = distance_fn(histograms_1, histograms_2)
 
-    return distance, histograms_1, histograms_2
+    res = (distance, histograms_1, histograms_2) if return_histograms else distance
+    return res
 
 
 def evaluate(
@@ -206,6 +212,7 @@ def evaluate(
         n_bins=50,
         distance_kind='iou',
         with_timestamps=True,
+        save_histograms=True,
         target_species_names=None,
         path_to_save_nn_traces=None,
         settings_idxs_to_save_histograms=None
@@ -233,19 +240,7 @@ def evaluate(
     target_species_names = target_species_names or all_species_names
     target_species_idxs = [all_species_names.index(name) for name in target_species_names]
 
-    # self_dist, *_ = get_distance(
-    #     data_1=histogram_data[:, :n_traces // 2, ...],
-    #     data_2=histogram_data[:, -n_traces // 2:, ...],
-    #     time_lag=20,
-    #     n_bins=n_bins,
-    #     with_timestamps=with_timestamps,
-    #     target_species_idxs=target_species_idxs,
-    #     histogram_bounds=None,
-    #     kind=distance_kind,
-    # )
-    #
-    # print(f"Dataset mean self-distance ({distance_kind}): {np.mean(self_dist)}")
-
+    start = time()
     traces = get_nn_histogram_data(
         project_folder,
         timestep,
@@ -258,25 +253,52 @@ def evaluate(
         path_to_save_generated_data=path_to_save_nn_traces,
         add_timestamps=with_timestamps,
     )
+    end = time()
+    print(f"Took {end - start:.1f} seconds")
 
-    species_distances = []
-    mean_disnances = []
+    # print(f"Start calculating distances for different time-lags")
+    # species_distances = []
+    # mean_distances = []
+    #
+    # for time_lag in range(n_steps - 1):
+    #     dist_i, *_ = get_distance(
+    #         data_1=histogram_data,
+    #         data_2=traces,
+    #         time_lag=time_lag,
+    #         n_bins=n_bins,
+    #         with_timestamps=with_timestamps,
+    #         target_species_idxs=target_species_idxs,
+    #         histogram_bounds=None,
+    #         kind=distance_kind,
+    #     )
+    #
+    #     species_distances.append(dist_i)
+    #     mean_distances.append(np.mean(dist_i))
+    # print(f"Took {end - start:.1f} seconds")
 
-    for time_lag in range(n_steps - 1):
-        dist_i, *_ = get_distance(
-            data_1=histogram_data,
-            data_2=traces,
-            time_lag=time_lag,
-            n_bins=n_bins,
-            with_timestamps=with_timestamps,
-            target_species_idxs=target_species_idxs,
-            histogram_bounds=None,
-            kind=distance_kind,
-        )
+    count = (multiprocessing.cpu_count() // 4) * 3 + 1
+    pool = multiprocessing.Pool(processes=count)
 
-        species_distances.append(dist_i)
-        mean_disnances.append(np.mean(dist_i))
+    task = partial(
+        get_distance,
+        data_1=histogram_data,
+        data_2=traces,
+        n_bins=n_bins,
+        with_timestamps=with_timestamps,
+        target_species_idxs=target_species_idxs,
+        histogram_bounds=None,
+        kind=distance_kind,
+        return_histograms=False,
+    )
 
+    print(f"Start calculating distances for different time-lags, using {count} CPU cores for multiprocessing")
+    start = time()
+    time_lags = list(range(n_steps - 1))
+    species_distances = pool.map(task, time_lags)
+    end = time()
+    print(f"Took {end - start:.1f} seconds")
+
+    mean_distances = [np.mean(dist_i) for dist_i in species_distances]
     species_distances = np.array(species_distances)
 
     histogram_explorer = dataset_explorer.get_histogram_file_explorer(model_id=model_id, nb_steps=0)
@@ -285,7 +307,7 @@ def evaluate(
 
     fig = plt.figure(figsize=(16, 10))
     plt.title(f"Mean {distance_kind} distance (averaged over all species and {n_settings} settings)")
-    plt.plot(mean_disnances)
+    plt.plot(mean_distances)
     plt.xlabel('time lag')
     plt.ylabel(f'distance')
     plt.savefig(mean_dist_fig_path)
@@ -301,86 +323,102 @@ def evaluate(
     plt.savefig(spec_dist_fig_path)
     plt.close(fig)
 
-    if settings_idxs_to_save_histograms is None:
-        settings_idxs_to_save_histograms = [0]
+    if save_histograms:
 
-    distance_fn = _histogram_distance if distance_kind == 'hist' else _iou_distance
+        if settings_idxs_to_save_histograms is None:
+            settings_idxs_to_save_histograms = [0]
 
-    for time_lag in range(5, n_steps - 1, 10):
+        distance_fn = _histogram_distance if distance_kind == 'l1' else _iou_distance
+        time_lag_range = range(5, n_steps - 1, 10)
 
-        histogram_explorer = dataset_explorer.get_histogram_file_explorer(model_id=model_id, nb_steps=time_lag)
-
-        self_dist, *_ = get_distance(
-            data_1=histogram_data[:, :n_traces // 2, ...],
-            data_2=histogram_data[:, -n_traces // 2:, ...],
-            time_lag=time_lag,
-            n_bins=n_bins,
-            with_timestamps=with_timestamps,
-            target_species_idxs=target_species_idxs,
-            histogram_bounds=None,
-            kind=distance_kind,
+        print(
+            f"Start building histograms for different settings: {settings_idxs_to_save_histograms}\n"
+            f"and time-lags: {list(time_lag_range)}"
         )
+        start = time()
 
-        species_distances, histograms_1, histograms_2 = get_distance(
-            data_1=histogram_data,
-            data_2=traces,
-            time_lag=time_lag,
-            n_bins=n_bins,
-            with_timestamps=with_timestamps,
-            target_species_idxs=target_species_idxs,
-            histogram_bounds=None,
-            kind=distance_kind,
-        )
+        for time_lag in tqdm(time_lag_range):
 
-        dist_dict = {
-            name: species_distances[idx]
-            for idx, name in enumerate(target_species_names)
-        }
-        with open(histogram_explorer.log_fp, 'w') as f:
-            f.write(
-                f"Dataset mean self-distance ({distance_kind}): {np.mean(self_dist):.4f}\n\n"
-                f"Mean histogram distance ({distance_kind}): {np.mean(species_distances):.4f}\n\n"
+            histogram_explorer = dataset_explorer.get_histogram_file_explorer(model_id=model_id, nb_steps=time_lag)
+
+            self_dist = get_distance(
+                data_1=histogram_data[:, :n_traces // 2, ...],
+                data_2=histogram_data[:, -n_traces // 2:, ...],
+                time_lag=time_lag,
+                n_bins=n_bins,
+                with_timestamps=with_timestamps,
+                target_species_idxs=target_species_idxs,
+                histogram_bounds=None,
+                kind=distance_kind,
+                return_histograms=False,
             )
-            f.write(
-                f"Species histogram distances ({distance_kind}):\n"
+
+            species_distances, histograms_1, histograms_2 = get_distance(
+                data_1=histogram_data,
+                data_2=traces,
+                time_lag=time_lag,
+                n_bins=n_bins,
+                with_timestamps=with_timestamps,
+                target_species_idxs=target_species_idxs,
+                histogram_bounds=None,
+                kind=distance_kind,
+                return_histograms=True,
             )
-            for k, v in dist_dict.items():
-                f.write(f"\t{k}: {v:.4f}\n")
 
-        for setting_idx in settings_idxs_to_save_histograms:
+            dist_dict = {
+                name: species_distances[idx]
+                for idx, name in enumerate(target_species_names)
+            }
+            with open(histogram_explorer.log_fp, 'w') as f:
+                f.write(
+                    f"Dataset mean self-distance ({distance_kind}): {np.mean(self_dist):.4f}\n\n"
+                    f"Mean histogram distance ({distance_kind}): {np.mean(species_distances):.4f}\n\n"
+                )
+                f.write(
+                    f"Species histogram distances ({distance_kind}):\n"
+                )
+                for k, v in dist_dict.items():
+                    f.write(f"\t{k}: {v:.4f}\n")
 
-            for species_idx in range(len(target_species_idxs)):
+            for setting_idx in settings_idxs_to_save_histograms:
 
-                curr_setting_distance = distance_fn(
-                    histograms_1[setting_idx:setting_idx + 1, species_idx:species_idx + 1],
-                    histograms_2[setting_idx:setting_idx + 1, species_idx:species_idx + 1]
-                )
+                for species_idx in range(len(target_species_idxs)):
 
-                save_path = os.path.join(
-                    histogram_explorer.histogram_folder,
-                    f'setting_{setting_idx}',
-                    f'{target_species_names[species_idx]}'
-                )
-                maybe_create_dir(os.path.dirname(save_path))
+                    curr_setting_distance = distance_fn(
+                        histograms_1[setting_idx:setting_idx + 1, species_idx:species_idx + 1],
+                        histograms_2[setting_idx:setting_idx + 1, species_idx:species_idx + 1]
+                    )
 
-                fig = plt.figure(figsize=(10, 6))
-                plt.title(
-                    f"{target_species_names[species_idx]}: "
-                    f"{distance_kind}: {curr_setting_distance}, "
-                    f"mean ({n_settings} settings): {species_distances[species_idx]:.4f}"
-                )
-                # plt.plot(*histograms_1[setting_idx, species_idx], '.-', label='gillespy')
-                # plt.plot(*histograms_2[setting_idx, species_idx], '.-', label='NN')
-                plt.bar(
-                    list(range(histograms_1.shape[-1])),
-                    histograms_1[setting_idx, species_idx, 1],
-                    label='gillespy', alpha=0.7
-                )
-                plt.bar(
-                    list(range(histograms_2.shape[-1])),
-                    histograms_2[setting_idx, species_idx, 1],
-                    label='NN', alpha=0.7
-                )
-                plt.legend()
-                plt.savefig(save_path)
-                plt.close(fig)
+                    save_path = os.path.join(
+                        histogram_explorer.histogram_folder,
+                        f'setting_{setting_idx}',
+                        f'{target_species_names[species_idx]}'
+                    )
+                    maybe_create_dir(os.path.dirname(save_path))
+
+                    fig = plt.figure(figsize=(10, 6))
+                    plt.title(
+                        f"{target_species_names[species_idx]}: "
+                        f"{distance_kind}: {curr_setting_distance}, "
+                        f"mean ({n_settings} settings): {species_distances[species_idx]:.4f}"
+                    )
+                    # plt.plot(*histograms_1[setting_idx, species_idx], '.-', label='gillespy')
+                    # plt.plot(*histograms_2[setting_idx, species_idx], '.-', label='NN')
+                    plt.bar(
+                        list(range(histograms_1.shape[-1])),
+                        histograms_1[setting_idx, species_idx, 1],
+                        label='gillespy', alpha=0.7
+                    )
+                    plt.bar(
+                        list(range(histograms_2.shape[-1])),
+                        histograms_2[setting_idx, species_idx, 1],
+                        label='NN', alpha=0.7
+                    )
+                    plt.legend()
+                    plt.savefig(save_path)
+                    plt.close(fig)
+
+        end = time()
+        print(f"Took {end - start:.1f} seconds")
+
+    print("All done.")

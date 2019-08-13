@@ -6,6 +6,7 @@ import os
 import pickle
 from collections import namedtuple
 from functools import partial
+from tqdm import tqdm
 
 from stochnet_v2.static_classes import nn_bodies
 from stochnet_v2.static_classes.top_layers import MixtureOutputLayer
@@ -399,7 +400,7 @@ class StochNet:
             )
         traces[1] = next_state_values
 
-        # for step in range(2, n_steps + 1):
+        # for step in tqdm(range(2, n_steps + 1)):
         #     next_state_values = next_state_values.reshape((-1, *state_shape))
         #     next_state_values = self.next_state(
         #         next_state_values,
@@ -416,7 +417,7 @@ class StochNet:
         print(f'iterate through {"traces" if iterate_through_traces else "settings"}')
 
         if iterate_through_traces:
-            for trace_idx in range(n_traces):
+            for trace_idx in tqdm(range(n_traces)):
                 state_values = next_state_values[trace_idx]
                 for step in range(2, n_steps + 1):
                     state_values = self.next_state(
@@ -429,7 +430,7 @@ class StochNet:
                     state_values = np.squeeze(state_values, 0)
                     traces[step, trace_idx] = state_values
         else:
-            for setting_idx in range(n_settings):
+            for setting_idx in tqdm(range(n_settings)):
                 state_values = next_state_values[:, setting_idx]
                 for step in range(2, n_steps + 1):
                     state_values = self.next_state(
