@@ -255,12 +255,9 @@ class Trainer:
         )
 
         summary_writer = tf.compat.v1.summary.FileWriter(tensorboard_log_dir, session.graph)
-
         learning_rate_summary = tf.compat.v1.summary.scalar('train_learning_rate', train_operations.learning_rate)
-
         # train_loss_summary = tf.compat.v1.summary.scalar('train_loss', train_operations.loss)  # TODO: FOR SCALAR LOSS
         train_loss_summary = tf.compat.v1.summary.scalar('train_loss', tf.reduce_mean(train_operations.loss))  # TODO: FOR VECTOR LOSS
-
         test_mean_loss_ph = tf.compat.v1.placeholder(tf.float32, ())
         test_loss_summary = tf.compat.v1.summary.scalar('test_mean_loss', test_mean_loss_ph)
 
@@ -290,7 +287,7 @@ class Trainer:
             histogram_summaries.append(summary)
 
         initial_learning_rate = session.run(train_operations.learning_rate)
-        next_learning_rate = initial_learning_rate
+        learning_rate = initial_learning_rate
 
         global_step = session.run(train_operations.global_step)
         decay_step = 0
@@ -301,165 +298,39 @@ class Trainer:
         tolerance_best_loss = float('inf')
         best_loss_step = 0
 
-        def reset_optimizer():
+        def _reset_optimizer():
             init_optimizer_vars = tf.compat.v1.variables_initializer(optimizer_vars)
             session.run(init_optimizer_vars)
 
-        def get_regular_checkpoint_path(step):
+        def _get_regular_checkpoint_path(step):
             return os.path.join(checkpoints_save_dir, f'regular_ckpt_{step}')
 
-        def get_best_checkpoint_path(step):
+        def _get_best_checkpoint_path(step):
             return os.path.join(checkpoints_save_dir, f'best_ckpt_{step}')
 
-        train_dataset, test_dataset = self._get_datasets(
-            model,
-            batch_size=batch_size,
-            kind=dataset_kind,
-        )
+        def _run_train_step():
 
-        regular_checkpoints_saver.save(session, get_regular_checkpoint_path(global_step))
+            feed_dict = {
+                train_input_x: X_train,
+                train_input_y: Y_train,
+                train_operations.learning_rate: learning_rate,
+            }
+            fetches = {
+                'gradients': train_operations.gradients,
+                'loss': train_operations.loss,
+                'learning_rate_summary': learning_rate_summary,
+                'loss_summary': train_loss_summary,
+                'global_step': train_operations.global_step,
+            }
 
-        LOGGER.info('Training...')
+            res = session.run(fetches=fetches, feed_dict=feed_dict)
+            res['loss'] = np.mean(res['loss'])  # TODO: FOR VECTOR LOSS
+            return res
 
-        for epoch in range(n_epochs):
-
-            epoch_start_time = time()
-            epoch_start_step = global_step
-
-            LOGGER.info(f'Epoch: {epoch + 1}')
-
-            for X_train, Y_train in train_dataset:
-
-                feed_dict = {
-                    train_input_x: X_train,
-                    train_input_y: Y_train,
-                    train_operations.learning_rate: next_learning_rate,
-                }
-                fetches = {
-                    'gradients': train_operations.gradients,
-                    'loss': train_operations.loss,
-                    'learning_rate_summary': learning_rate_summary,
-                    'loss_summary': train_loss_summary,
-                    'global_step': train_operations.global_step,
-                }
-
-                result = session.run(fetches=fetches, feed_dict=feed_dict)
-
-                result['loss'] = np.mean(result['loss'])  # TODO: FOR VECTOR LOSS
-
-                global_step = result['global_step']
-
-                # drop lr for next step if train with exponential decay
-                if learning_strategy.__class__.__name__ == 'ExpDecayLearningStrategy':
-                    next_learning_rate = initial_learning_rate.copy()
-                    next_learning_rate *= np.exp(-global_step * learning_strategy.lr_decay)
-                    if learning_strategy.lr_cos_steps is not None:
-                        next_learning_rate *= np.abs(
-                            np.cos(learning_strategy.lr_cos_phase * decay_step / learning_strategy.lr_cos_steps)
-                        )
-                    next_learning_rate += learning_strategy.minimal_lr
-
-                summary_writer.add_summary(result['learning_rate_summary'], global_step)
-                summary_writer.add_summary(result['loss_summary'], global_step)
-
-                # TODO: TMP, categorical logits and probs summaries:
-                if global_step % 100 == 0:
-                    cat_logits_summaries_values, cat_probs_summaries_values = session.run(
-                        [cat_logits_summaries, cat_probs_summaries],
-                        {train_input_x: X_train}
-                    )
-                    for summary_val in cat_logits_summaries_values:
-                        summary_writer.add_summary(summary_val, global_step)
-                    for summary_val in cat_probs_summaries_values:
-                        summary_writer.add_summary(summary_val, global_step)
-                # TODO: end of TMP
-
-                # HANDLE NAN VALUES
-                has_nans = any([
-                    np.isnan(result['loss']),
-                ])
-                if has_nans:
-                    LOGGER.warning(f'Loss is None on step {global_step}, restore previous checkpoint...')
-                    nans_step_counter += 1
-                    checkpoint_step = global_step // _REGULAR_CHECKPOINTS_DELTA
-                    checkpoint_step -= nans_step_counter
-                    checkpoint_step = max(checkpoint_step, 0)
-                    checkpoint_step *= _REGULAR_CHECKPOINTS_DELTA
-
-                    if checkpoint_step == 0:
-                        LOGGER.info(f'checkpoint_step is 0, reinitialize all variables...')
-                        session.run(tf.compat.v1.variables_initializer(global_vars))
-                    else:
-                        try:
-                            regular_checkpoints_saver.restore(
-                                session,
-                                get_regular_checkpoint_path(checkpoint_step)
-                            )
-                        except ValueError:
-                            LOGGER.info(
-                                f'Checkpoint for step {checkpoint_step} not found, '
-                                f'will restore from the oldest existing checkpoint...'
-                            )
-                            ckpt_state = tf.compat.v1.train.get_checkpoint_state(checkpoints_save_dir)
-                            oldest_ckpt_path = ckpt_state.all_model_checkpoint_paths[0]
-                            regular_checkpoints_saver.restore(
-                                session,
-                                oldest_ckpt_path
-                            )
-                        reset_optimizer()
-                    continue
-
-                # save best checkpoint
-                if result['loss'] < best_loss:
-                    best_loss_checkpoints_saver.save(session, get_best_checkpoint_path(global_step))
-                    best_loss, best_loss_step = result['loss'], global_step
-
-                # save regular checkpoint
-                if global_step % _REGULAR_CHECKPOINTS_DELTA == 0:
-                    nans_step_counter = 0
-                    regular_checkpoints_saver.save(session, get_regular_checkpoint_path(global_step))
-
-                # reset optimizer parameters for next cosine phase
-                if learning_strategy.__class__.__name__ == 'ExpDecayLearningStrategy':
-                    if learning_strategy.lr_cos_steps is not None:
-                        if global_step % learning_strategy.lr_cos_steps == 0 and global_step > 0:
-                            LOGGER.info('Reinitialize optimizer...')
-                            reset_optimizer()
-                            decay_step = 0
-
-                # increase global step
-                session.run(train_operations.increase_global_step)
-                decay_step += 1
-
-            # drop lr for next epoch if train with tolerance
-            if learning_strategy.__class__.__name__ == 'ToleranceDropLearningStrategy':
-                if best_loss < tolerance_best_loss:
-                    tolerance_best_loss = best_loss
-                    tolerance_step = 0
-                else:
-                    tolerance_step += 1
-
-                if tolerance_step >= learning_strategy.epochs_tolerance:
-                    next_learning_rate = np.maximum(
-                        learning_strategy.minimal_lr,
-                        next_learning_rate * learning_strategy.lr_decay
-                    )
-                    tolerance_step = 0
-
-            # HISTOGRAMS
-            for histogram_summary in histogram_summaries:
-                histogram_summary_val = session.run(histogram_summary)
-                summary_writer.add_summary(histogram_summary_val, epoch)
-
-            epoch_time = time() - epoch_start_time
-            epoch_steps = global_step - epoch_start_step
-            avg_step_time = epoch_time / epoch_steps
-
-            # TEST
+        def _run_test():
             test_losses = []
 
             for X_test, Y_test in test_dataset:
-
                 feed_dict = {
                     train_input_x: X_test,
                     train_input_y: Y_test,
@@ -468,8 +339,8 @@ class Trainer:
                     'loss': train_operations.loss,
                 }
 
-                result = session.run(fetches=fetches, feed_dict=feed_dict)
-                test_losses.append(result['loss'])
+                res = session.run(fetches=fetches, feed_dict=feed_dict)
+                test_losses.append(res['loss'])
 
             test_mean_loss = np.mean(test_losses)
             test_loss_summary_val = session.run(
@@ -478,9 +349,160 @@ class Trainer:
             )
             summary_writer.add_summary(test_loss_summary_val, epoch)
 
-            LOGGER.info(f' = Minimal loss value = {best_loss},\n'
-                        f' - {epoch_steps} steps took {epoch_time:.0f} seconds, avg_step_time={avg_step_time:.3f}\n')
+        def _run_histograms():
+            for histogram_summary in histogram_summaries:
+                histogram_summary_val = session.run(histogram_summary)
+                summary_writer.add_summary(histogram_summary_val, epoch)
 
-        best_checkpoint_path = get_best_checkpoint_path(best_loss_step)
+        def _run_cat_histograms():
+            cat_logits_summaries_values, cat_probs_summaries_values = session.run(
+                [cat_logits_summaries, cat_probs_summaries],
+                {train_input_x: X_train}
+            )
+            for summary_val in cat_logits_summaries_values:
+                summary_writer.add_summary(summary_val, global_step)
+            for summary_val in cat_probs_summaries_values:
+                summary_writer.add_summary(summary_val, global_step)
+
+        def _maybe_drop_lr_tolerance(lr, tol_step, tol_best_loss):
+            if learning_strategy.__class__.__name__ == 'ToleranceDropLearningStrategy':
+                if tol_best_loss < tol_best_loss:
+                    tol_best_loss = tol_best_loss
+                    tol_step = 0
+                else:
+                    tol_step += 1
+                if tol_step >= learning_strategy.epochs_tolerance:
+                    lr = np.maximum(
+                        learning_strategy.minimal_lr,
+                        lr * learning_strategy.lr_decay
+                    )
+                    tol_step = 0
+            return lr, tol_step, tol_best_loss
+
+        def _maybe_drop_lr_decay(lr):
+            if learning_strategy.__class__.__name__ == 'ExpDecayLearningStrategy':
+                lr = initial_learning_rate.copy()
+                lr *= np.exp(-global_step * learning_strategy.lr_decay)
+                if learning_strategy.lr_cos_steps is not None:
+                    lr *= np.abs(
+                        np.cos(learning_strategy.lr_cos_phase * decay_step / learning_strategy.lr_cos_steps)
+                    )
+                lr += learning_strategy.minimal_lr
+            return lr
+
+        def _handle_nans(counter):
+            LOGGER.warning(f'Loss is None on step {global_step}, restore previous checkpoint...')
+            counter += 1
+            checkpoint_step = global_step // _REGULAR_CHECKPOINTS_DELTA
+            checkpoint_step -= counter
+            checkpoint_step = max(checkpoint_step, 0)
+            checkpoint_step *= _REGULAR_CHECKPOINTS_DELTA
+
+            if checkpoint_step == 0:
+                LOGGER.info(f'checkpoint_step is 0, reinitialize all variables...')
+                session.run(tf.compat.v1.variables_initializer(global_vars))
+            else:
+                try:
+                    regular_checkpoints_saver.restore(
+                        session,
+                        _get_regular_checkpoint_path(checkpoint_step)
+                    )
+                except ValueError:
+                    LOGGER.info(
+                        f'Checkpoint for step {checkpoint_step} not found, '
+                        f'will restore from the oldest existing checkpoint...'
+                    )
+                    ckpt_state = tf.compat.v1.train.get_checkpoint_state(checkpoints_save_dir)
+                    oldest_ckpt_path = ckpt_state.all_model_checkpoint_paths[0]
+                    regular_checkpoints_saver.restore(
+                        session,
+                        oldest_ckpt_path
+                    )
+                _reset_optimizer()
+            return counter
+
+        train_dataset, test_dataset = self._get_datasets(
+            model,
+            batch_size=batch_size,
+            kind=dataset_kind,
+        )
+
+        regular_checkpoints_saver.save(session, _get_regular_checkpoint_path(global_step))
+
+        LOGGER.info('Training...')
+
+        for epoch in range(n_epochs):
+
+            epoch_start_time = time()
+            epoch_start_step = global_step
+
+            LOGGER.info(f'\nEpoch: {epoch + 1}')
+
+            for X_train, Y_train in train_dataset:
+
+                result = _run_train_step()
+                global_step = result['global_step']
+
+                # HANDLE NAN VALUES
+                if np.isnan(result['loss']):
+                    nans_step_counter = _handle_nans(nans_step_counter)
+                    continue
+
+                # drop lr for next step if train with exponential decay
+                learning_rate = _maybe_drop_lr_decay(learning_rate)
+
+                summary_writer.add_summary(result['learning_rate_summary'], global_step)
+                summary_writer.add_summary(result['loss_summary'], global_step)
+
+                # TODO: TMP, categorical logits and probs summaries:
+                if global_step % 100 == 0:
+                    _run_cat_histograms()
+                # TODO: end of TMP
+
+                # save best checkpoint
+                if result['loss'] < best_loss:
+                    best_loss_checkpoints_saver.save(session, _get_best_checkpoint_path(global_step))
+                    best_loss, best_loss_step = result['loss'], global_step
+
+                # save regular checkpoint
+                if global_step % _REGULAR_CHECKPOINTS_DELTA == 0:
+                    nans_step_counter = 0
+                    regular_checkpoints_saver.save(session, _get_regular_checkpoint_path(global_step))
+
+                # reset optimizer parameters for next cosine phase
+                if learning_strategy.__class__.__name__ == 'ExpDecayLearningStrategy':
+                    if learning_strategy.lr_cos_steps is not None:
+                        if global_step % learning_strategy.lr_cos_steps == 0 and global_step > 0:
+                            LOGGER.info('Reinitialize optimizer...')
+                            _reset_optimizer()
+                            decay_step = 0
+
+                # increase global step
+                session.run(train_operations.increase_global_step)
+                decay_step += 1
+
+            # drop lr for next epoch if train with tolerance
+            learning_rate, tolerance_step, tolerance_best_loss = _maybe_drop_lr_tolerance(
+                learning_rate, tolerance_step, tolerance_best_loss)
+
+            # HISTOGRAMS
+            _run_histograms()
+
+            epoch_time = time() - epoch_start_time
+            epoch_steps = global_step - epoch_start_step
+            avg_step_time = epoch_time / epoch_steps
+
+            # TEST
+            test_start_time = time()
+            _run_test()
+            test_time = time() - test_start_time
+
+            LOGGER.info(
+                f' = Minimal loss value = {best_loss},\n'
+                f' - {epoch_steps} steps took {epoch_time:.1f} seconds, avg_step_time={avg_step_time:.3f}\n'
+                f' - test time: {test_time:.1f} seconds'
+            )
+
+        best_checkpoint_path = _get_best_checkpoint_path(best_loss_step)
 
         return best_checkpoint_path
