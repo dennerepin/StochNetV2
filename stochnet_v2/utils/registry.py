@@ -61,9 +61,9 @@ CONSTRAINTS_REGISTRY = Registry(name='KernelConstraintsRegistry')
 REGULARIZERS_REGISTRY = Registry(name='RegularizersRegistry')
 ACTIVATIONS_REGISTRY = Registry(name='ActivationsRegistry')
 
-CONSTRAINTS_REGISTRY['maxnorm'] = tf.keras.constraints.MaxNorm(3)
-CONSTRAINTS_REGISTRY['minmaxnorm'] = tf.keras.constraints.MinMaxNorm(3)
-CONSTRAINTS_REGISTRY['unitnorm'] = tf.keras.constraints.UnitNorm(3)
+CONSTRAINTS_REGISTRY['maxnorm'] = tf.keras.constraints.MaxNorm(3.)
+CONSTRAINTS_REGISTRY['minmaxnorm'] = tf.keras.constraints.MinMaxNorm(0., 3.)
+CONSTRAINTS_REGISTRY['unitnorm'] = tf.keras.constraints.UnitNorm()
 CONSTRAINTS_REGISTRY['none'] = None
 
 REGULARIZERS_REGISTRY['l1'] = tf.keras.regularizers.l1(0.01)
@@ -71,9 +71,9 @@ REGULARIZERS_REGISTRY['l2'] = tf.keras.regularizers.l2(0.01)
 REGULARIZERS_REGISTRY['l1_l2'] = tf.keras.regularizers.l1_l2(0.01, 0.01)
 REGULARIZERS_REGISTRY['none'] = None
 
-ACTIVATIONS_REGISTRY['relu'] = tf.keras.layers.ReLU()
-ACTIVATIONS_REGISTRY['leakyrelu'] = tf.keras.layers.LeakyReLU(0.2)
+ACTIVATIONS_REGISTRY['relu'] = tf.compat.v1.nn.relu
 ACTIVATIONS_REGISTRY['relu6'] = tf.compat.v1.nn.relu6
+ACTIVATIONS_REGISTRY['none'] = tf.keras.activations.linear
+ACTIVATIONS_REGISTRY['leakyrelu'] = tf.keras.layers.LeakyReLU(0.2)
 ACTIVATIONS_REGISTRY['prelu'] = tf.keras.layers.PReLU()
 ACTIVATIONS_REGISTRY['elu'] = tf.keras.layers.ELU(1.0)
-ACTIVATIONS_REGISTRY['none'] = tf.keras.activations.linear

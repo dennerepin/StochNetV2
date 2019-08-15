@@ -98,7 +98,7 @@ class Trainer:
         trainable_graph, train_operations, train_input_x, train_input_y = \
             self._build_trainable_graph(model, learning_strategy)
 
-        with tf.Session(graph=trainable_graph) as session:
+        with tf.compat.v1.Session(graph=trainable_graph) as session:
 
             if ckpt_path is None:
                 session.run(tf.compat.v1.global_variables_initializer())
@@ -139,9 +139,14 @@ class Trainer:
         copy_graph(model.graph, trainable_graph)
         model_input = get_transformed_tensor(model.input_placeholder, trainable_graph)
         rv_output = get_transformed_tensor(model.rv_output_ph, trainable_graph)
-        loss = get_transformed_tensor(model.loss, trainable_graph)
+        model_loss = get_transformed_tensor(model.loss, trainable_graph)
 
         with trainable_graph.as_default():
+
+            regularization_loss = tf.losses.get_regularization_loss()
+            print(f"REGULARIZATION_LOSSES:{regularization_loss}")
+
+            loss = model_loss + regularization_loss
 
             learning_rate = tf.compat.v1.placeholder_with_default(
                 learning_strategy.initial_lr,
@@ -150,7 +155,7 @@ class Trainer:
             )
 
             global_step = tf.Variable(0, trainable=False, name='global_step')
-            increase_global_step = tf.assign_add(global_step, 1)
+            increase_global_step = tf.compat.v1.assign_add(global_step, 1)
 
             optimizer_type = learning_strategy.optimizer_type.lower()
             if optimizer_type == 'adam':
@@ -160,7 +165,7 @@ class Trainer:
             else:
                 raise NotImplementedError(f'optimizer "{optimizer_type}" is not supported')
 
-            gradients = optimizer.compute_gradients(loss, var_list=tf.trainable_variables())
+            gradients = optimizer.compute_gradients(loss, var_list=tf.compat.v1.trainable_variables())
             gradients = optimizer.apply_gradients(gradients)
 
             train_operations = TrainOperations(
@@ -179,7 +184,7 @@ class Trainer:
     def _get_datasets(
             model,
             batch_size,
-            kind='tfrecord'
+            kind='hdf5'
     ):
         if kind == 'tfrecord':
             train_ds = TFRecordsDataset(
@@ -251,12 +256,28 @@ class Trainer:
 
         summary_writer = tf.compat.v1.summary.FileWriter(tensorboard_log_dir, session.graph)
 
-        train_loss_summary = tf.compat.v1.summary.scalar('train_loss', train_operations.loss)
         learning_rate_summary = tf.compat.v1.summary.scalar('train_learning_rate', train_operations.learning_rate)
+
+        # train_loss_summary = tf.compat.v1.summary.scalar('train_loss', train_operations.loss)  # TODO: FOR SCALAR LOSS
+        train_loss_summary = tf.compat.v1.summary.scalar('train_loss', tf.reduce_mean(train_operations.loss))  # TODO: FOR VECTOR LOSS
 
         test_mean_loss_ph = tf.compat.v1.placeholder(tf.float32, ())
         test_loss_summary = tf.compat.v1.summary.scalar('test_mean_loss', test_mean_loss_ph)
 
+        # TODO: TMP, categorical logits and probs summaries
+        cat_logits = session.graph.get_tensor_by_name('MixtureOutputLayer/CategoricalOutputLayer/logits/BiasAdd:0')
+        cat_probs = session.graph.get_tensor_by_name(
+            'MixtureOutputLayer_1/random_variable/CategoricalOutputLayer/random_variable/Categorical/probs:0'
+        )
+        n_classes = cat_logits.shape.as_list()[-1]
+        cat_logits_summaries = []
+        cat_probs_summaries = []
+        for n in range(n_classes):
+            cat_logits_summaries.append(tf.compat.v1.summary.histogram('cat_logits', cat_logits[..., n]))
+            cat_probs_summaries.append(tf.compat.v1.summary.histogram('cat_probs', cat_probs[..., n]))
+        # TODO: end of TMP
+
+        # weights and biases summaries
         layer_params = {
             var.name.split(':')[0]: var
             for var in trainable_vars
@@ -324,6 +345,8 @@ class Trainer:
 
                 result = session.run(fetches=fetches, feed_dict=feed_dict)
 
+                result['loss'] = np.mean(result['loss'])  # TODO: FOR VECTOR LOSS
+
                 global_step = result['global_step']
 
                 # drop lr for next step if train with exponential decay
@@ -338,6 +361,18 @@ class Trainer:
 
                 summary_writer.add_summary(result['learning_rate_summary'], global_step)
                 summary_writer.add_summary(result['loss_summary'], global_step)
+
+                # TODO: TMP, categorical logits and probs summaries:
+                if global_step % 100 == 0:
+                    cat_logits_summaries_values, cat_probs_summaries_values = session.run(
+                        [cat_logits_summaries, cat_probs_summaries],
+                        {train_input_x: X_train}
+                    )
+                    for summary_val in cat_logits_summaries_values:
+                        summary_writer.add_summary(summary_val, global_step)
+                    for summary_val in cat_probs_summaries_values:
+                        summary_writer.add_summary(summary_val, global_step)
+                # TODO: end of TMP
 
                 # HANDLE NAN VALUES
                 has_nans = any([
@@ -409,6 +444,7 @@ class Trainer:
                         learning_strategy.minimal_lr,
                         next_learning_rate * learning_strategy.lr_decay
                     )
+                    tolerance_step = 0
 
             # HISTOGRAMS
             for histogram_summary in histogram_summaries:

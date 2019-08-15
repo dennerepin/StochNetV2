@@ -1,4 +1,5 @@
 import abc
+import numpy as np
 import tensorflow as tf
 import tensorflow_probability as tfp
 
@@ -12,7 +13,8 @@ from stochnet_v2.utils.errors import DimensionError
 from stochnet_v2.utils.registry import Registry
 
 tfd = tfp.distributions
-Dense = tf.keras.layers.Dense
+Dense = tf.layers.Dense
+_EPS = 0.01
 
 
 MIXTURE_COMPONENTS_REGISTRY = Registry(name='MixtureComponentsDescriptionsRegistry')
@@ -229,7 +231,7 @@ class CategoricalOutputLayer(RandomVariableOutputLayer):
                     base = Dense(self.hidden_size, **self._layer_params)(base)
                     base1 = self._activation_fn(base)
                     base1 = Dense(self.hidden_size, **self._layer_params)(base1)
-                    base = tf.keras.layers.Add()([base, base1])
+                    base = tf.add(base, base1)
 
             logits = Dense(
                 self.number_of_output_neurons,
@@ -246,12 +248,15 @@ class CategoricalOutputLayer(RandomVariableOutputLayer):
             with tf.variable_scope('random_variable'):
                 return Categorical(nn_prediction_tensor)
 
-    def loss_function(self, y_true, y_pred):
-        loss = tf.nn.softmax_cross_entropy_with_logits(
-            labels=y_true,
-            logits=self.get_random_variable(y_pred)
-        )
+    @staticmethod
+    def loss_function(y_true, y_pred):
+        loss = tf.nn.softmax_cross_entropy_with_logits(labels=y_true, logits=y_pred)
         return loss
+
+    @staticmethod
+    def log_likelihood_function(y_true, y_pred):
+        log_likelihood = -tf.nn.softmax_cross_entropy_with_logits(labels=y_true, logits=y_pred)
+        return log_likelihood
 
 
 @MIXTURE_COMPONENTS_REGISTRY.register('normal_diag')
@@ -310,47 +315,48 @@ class MultivariateNormalDiagOutputLayer(RandomVariableOutputLayer):
 
     def add_layer_on_top(self, base):
 
-        with tf.variable_scope(self.name_scope):
+        with tf.name_scope(self.name_scope) as scope:
+            with tf.variable_scope(scope):
 
-            s = base.shape.as_list()[-1]
+                s = base.shape.as_list()[-1]
 
-            mu, diag = tf.keras.layers.Lambda(
-                lambda x: tf.split(x, num_or_size_splits=[s//2, s - s//2], axis=-1)
-            )(base)
+                mu, diag = tf.split(base, num_or_size_splits=[s//2, s - s//2], axis=-1)
 
-            if self.hidden_size:
+                if self.hidden_size:
 
-                with tf.variable_scope('residual'):
+                    with tf.variable_scope('residual'):
 
-                    with tf.variable_scope('mu'):
-                        mu = self._activation_fn(mu)
-                        mu = Dense(self.hidden_size, **self._mu_layer_params)(mu)
-                        mu1 = self._activation_fn(mu)
-                        mu1 = Dense(self.hidden_size, **self._mu_layer_params)(mu1)
-                        mu = tf.keras.layers.Add()([mu, mu1])
+                        with tf.variable_scope('mu'):
+                            mu = self._activation_fn(mu)
+                            mu = Dense(self.hidden_size, **self._mu_layer_params)(mu)
+                            mu1 = self._activation_fn(mu)
+                            mu1 = Dense(self.hidden_size, **self._mu_layer_params)(mu1)
+                            mu = tf.add(mu, mu1)
 
-                    with tf.variable_scope('diag'):
-                        diag = self._activation_fn(diag)
-                        diag = Dense(self.hidden_size, **self._diag_layer_params)(diag)
-                        diag1 = self._activation_fn(diag)
-                        diag1 = Dense(self.hidden_size, **self._diag_layer_params)(diag1)
-                        diag = tf.keras.layers.Add()([diag, diag1])
+                        with tf.variable_scope('diag'):
+                            diag = self._activation_fn(diag)
+                            diag = Dense(self.hidden_size, **self._diag_layer_params)(diag)
+                            diag1 = self._activation_fn(diag)
+                            diag1 = Dense(self.hidden_size, **self._diag_layer_params)(diag1)
+                            diag = tf.add(diag, diag1)
 
-            mu = Dense(
-                self._sample_space_dimension,
-                activation=None,
-                name='mu',
-                **self._mu_layer_params,
-            )(mu)
+                mu = Dense(
+                    self._sample_space_dimension,
+                    activation=None,
+                    name='mu',
+                    **self._mu_layer_params,
+                )(mu)
 
-            diag = Dense(
-                self._sample_space_dimension,
-                activation=tf.exp,
-                name='diag',
-                **self._diag_layer_params,
-            )(diag)
+                diag = Dense(
+                    self._sample_space_dimension,
+                    activation=tf.exp,
+                    name='diag',
+                    **self._diag_layer_params,
+                )(diag)
 
-            return tf.keras.layers.Concatenate(axis=-1)([mu, diag])
+                diag = tf.clip_by_value(diag, _EPS, np.inf)  # TODO
+
+                return tf.concat([mu, diag], axis=-1)
 
     def get_random_variable(self, nn_prediction_tensor):
         self.check_input_shape(nn_prediction_tensor)
@@ -373,8 +379,8 @@ class MultivariateNormalDiagOutputLayer(RandomVariableOutputLayer):
 
     def loss_function(self, y_true, y_pred):
         loss = - self.log_likelihood(y_true, y_pred)
-        # loss = tf.reshape(loss, [-1])
-        loss = tf.math.reduce_mean(loss)
+        loss = tf.reshape(loss, [-1])
+        # loss = tf.math.reduce_mean(loss)
         return loss
 
     def log_likelihood(self, y_true, y_pred):
@@ -448,62 +454,63 @@ class MultivariateNormalTriLOutputLayer(RandomVariableOutputLayer):
 
     def add_layer_on_top(self, base):
 
-        with tf.variable_scope(self.name_scope):
+        with tf.name_scope(self.name_scope) as scope:
+            with tf.variable_scope(scope):
 
-            shape = base.shape.as_list()
-            s = shape[-1] // 3
+                shape = base.shape.as_list()
+                s = shape[-1] // 3
 
-            mu, diag, sub_diag = tf.keras.layers.Lambda(
-                lambda x: tf.split(x, num_or_size_splits=[s, s, shape[-1] - 2 * s], axis=-1)
-            )(base)
+                mu, diag, sub_diag = tf.split(base, num_or_size_splits=[s, s, shape[-1] - 2 * s], axis=-1)
 
-            if self.hidden_size:
+                if self.hidden_size:
 
-                with tf.variable_scope('residual'):
+                    with tf.variable_scope('residual'):
 
-                    with tf.variable_scope('mu'):
-                        mu = self._activation_fn(mu)
-                        mu = Dense(self.hidden_size, **self._mu_layer_params)(mu)
-                        mu1 = self._activation_fn(mu)
-                        mu1 = Dense(self.hidden_size, **self._mu_layer_params)(mu1)
-                        mu = tf.keras.layers.Add()([mu, mu1])
+                        with tf.variable_scope('mu'):
+                            mu = self._activation_fn(mu)
+                            mu = Dense(self.hidden_size, **self._mu_layer_params)(mu)
+                            mu1 = self._activation_fn(mu)
+                            mu1 = Dense(self.hidden_size, **self._mu_layer_params)(mu1)
+                            mu = tf.add(mu, mu1)
 
-                    with tf.variable_scope('diag'):
-                        diag = self._activation_fn(diag)
-                        diag = Dense(self.hidden_size, **self._diag_layer_params)(diag)
-                        diag1 = self._activation_fn(diag)
-                        diag1 = Dense(self.hidden_size, **self._diag_layer_params)(diag1)
-                        diag = tf.keras.layers.Add()([diag, diag1])
+                        with tf.variable_scope('diag'):
+                            diag = self._activation_fn(diag)
+                            diag = Dense(self.hidden_size, **self._diag_layer_params)(diag)
+                            diag1 = self._activation_fn(diag)
+                            diag1 = Dense(self.hidden_size, **self._diag_layer_params)(diag1)
+                            diag = tf.add(diag, diag1)
 
-                    with tf.variable_scope('sub_diag'):
-                        sub_diag = self._activation_fn(sub_diag)
-                        sub_diag = Dense(self.hidden_size, **self._sub_diag_layer_params)(sub_diag)
-                        sub_diag1 = self._activation_fn(sub_diag)
-                        sub_diag1 = Dense(self.hidden_size, **self._sub_diag_layer_params)(sub_diag1)
-                        sub_diag = tf.keras.layers.Add()([sub_diag, sub_diag1])
+                        with tf.variable_scope('sub_diag'):
+                            sub_diag = self._activation_fn(sub_diag)
+                            sub_diag = Dense(self.hidden_size, **self._sub_diag_layer_params)(sub_diag)
+                            sub_diag1 = self._activation_fn(sub_diag)
+                            sub_diag1 = Dense(self.hidden_size, **self._sub_diag_layer_params)(sub_diag1)
+                            sub_diag = tf.add(sub_diag, sub_diag1)
 
-            mu = Dense(
-                self._sample_space_dimension,
-                activation=None,
-                name='mu',
-                **self._mu_layer_params,
-            )(mu)
+                mu = Dense(
+                    self._sample_space_dimension,
+                    activation=None,
+                    name='mu',
+                    **self._mu_layer_params,
+                )(mu)
 
-            diag = Dense(
-                self._sample_space_dimension,
-                activation=tf.exp,
-                name='diag',
-                **self._diag_layer_params,
-            )(diag)
+                diag = Dense(
+                    self._sample_space_dimension,
+                    activation=tf.exp,
+                    name='diag',
+                    **self._diag_layer_params,
+                )(diag)
 
-            sub_diag = Dense(
-                self._number_of_sub_diag_entries,
-                activation=None,
-                name='sub_diag',
-                **self._sub_diag_layer_params,
-            )(sub_diag)
+                diag = tf.clip_by_value(diag, _EPS, np.inf)  # TODO
 
-            return tf.keras.layers.Concatenate(axis=-1)([mu, diag, sub_diag])
+                sub_diag = Dense(
+                    self._number_of_sub_diag_entries,
+                    activation=None,
+                    name='sub_diag',
+                    **self._sub_diag_layer_params,
+                )(sub_diag)
+
+                return tf.concat([mu, diag, sub_diag], axis=-1)
 
     def get_random_variable(self, nn_prediction_tensor):
 
@@ -543,8 +550,8 @@ class MultivariateNormalTriLOutputLayer(RandomVariableOutputLayer):
 
     def loss_function(self, y_true, y_pred):
         loss = - self.log_likelihood(y_true, y_pred)
-        # loss = tf.reshape(loss, [-1])
-        loss = tf.math.reduce_mean(loss)
+        loss = tf.reshape(loss, [-1])
+        # loss = tf.math.reduce_mean(loss)
         return loss
 
     def log_likelihood(self, y_true, y_pred):
@@ -565,6 +572,11 @@ class MixtureOutputLayer(RandomVariableOutputLayer):
             components,
     ):
         super().__init__()
+        if len(components) != categorical.number_of_classes:
+            raise ValueError(
+                f"Number of classes of Categorical is not equal "
+                f"to the number of components provided for Mixture."
+            )
         self.number_of_components = len(components)
         self.categorical = categorical
         self.components = list(components)
@@ -609,7 +621,7 @@ class MixtureOutputLayer(RandomVariableOutputLayer):
             categorical_layer = self.categorical.add_layer_on_top(base)
             components_layers = [component.add_layer_on_top(base) for component in self.components]
             mixture_layers = [categorical_layer] + components_layers
-            return tf.keras.layers.Concatenate(axis=-1)(mixture_layers)
+            return tf.concat(mixture_layers, axis=-1)
 
     def _add_layer_on_top_individual(self, base):
         # individual slice for each component
@@ -628,6 +640,7 @@ class MixtureOutputLayer(RandomVariableOutputLayer):
                 base,
                 [0, 0],
                 [-1, cat_slice_size],
+                name='categorical_slice',
             )
             print(f'categorical: {self.categorical.__class__.__name__} '
                   f'from 0 for {cat_slice_size} - {categorical_slice.shape.as_list()}')
@@ -638,6 +651,7 @@ class MixtureOutputLayer(RandomVariableOutputLayer):
                     base,
                     [0, cat_slice_size + i * slice_size],
                     [-1, slice_size],
+                    name=f'component_{i}_slice'
                 )
                 print(f'component {i+1}: {component.__class__.__name__} '
                       f'from {cat_slice_size + i * slice_size} for {slice_size} - {component_slice.shape.as_list()}')
@@ -645,7 +659,7 @@ class MixtureOutputLayer(RandomVariableOutputLayer):
                 components_outputs.append(component_output)
 
             mixture_outputs = [categorical_output] + components_outputs
-            return tf.keras.layers.Concatenate(axis=-1)(mixture_outputs)
+            return tf.concat(mixture_outputs, axis=-1)
 
     def _add_layer_on_top_individual_cat(self, base):
         # separate slice for categorical, shared for other
@@ -680,7 +694,7 @@ class MixtureOutputLayer(RandomVariableOutputLayer):
                 components_outputs.append(component_output)
 
             mixture_outputs = [categorical_output] + components_outputs
-            return tf.keras.layers.Concatenate(axis=-1)(mixture_outputs)
+            return tf.concat(mixture_outputs, axis=-1)
 
     def get_random_variable(self, nn_prediction_tensor):
         self.check_input_shape(nn_prediction_tensor)
@@ -692,17 +706,19 @@ class MixtureOutputLayer(RandomVariableOutputLayer):
                     nn_prediction_tensor,
                     [0, 0],
                     [-1, self.categorical.number_of_output_neurons],
+                    name='categorical_predictions',
                 )
                 categorical_random_variable = self.categorical.get_random_variable(categorical_predictions)
 
                 components_random_variables = []
                 start_slicing_index = self.categorical.number_of_output_neurons
 
-                for component in self.components:
+                for i, component in enumerate(self.components):
                     component_predictions = tf.slice(
                         nn_prediction_tensor,
                         [0, start_slicing_index],
-                        [-1, component.number_of_output_neurons]
+                        [-1, component.number_of_output_neurons],
+                        name=f'component_{i}_predictions',
                     )
                     component_random_variable = component.get_random_variable(component_predictions)
                     components_random_variables.append(component_random_variable)
@@ -711,8 +727,8 @@ class MixtureOutputLayer(RandomVariableOutputLayer):
 
     def loss_function(self, y_true, y_pred):
         loss = - self.log_likelihood(y_true, y_pred)
-        # loss = tf.reshape(loss, [-1])
-        loss = tf.math.reduce_mean(loss)
+        loss = tf.reshape(loss, [-1])
+        # loss = tf.math.reduce_mean(loss)
         return loss
 
     def log_likelihood(self, y_true, y_pred):

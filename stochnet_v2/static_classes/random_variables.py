@@ -40,7 +40,7 @@ class Categorical:
                 [-1, self.number_of_classes]
             ).eval()
 
-        description_preamble = f"Categorical random variable with {self.number_of_classes} classes.\n\n"
+        description_preamble = f"\n\nCategorical random variable with {self.number_of_classes} classes.\n\n"
 
         for j in range(self.nb_of_independent_random_variables):
             description = f"{j+1}." + description_preamble + \
@@ -99,7 +99,7 @@ class MultivariateNormalDiag:
                 [-1, self.sample_space_dimension, self.sample_space_dimension]
             ).eval()
 
-        description_preamble = "Multivariate Normal random variable.\n\n"
+        description_preamble = "\n\nMultivariate Normal random variable.\n\n"
 
         for j in range(self.nb_of_independent_random_variables):
 
@@ -159,7 +159,7 @@ class MultivariateNormalTriL:
                 [-1, self.sample_space_dimension, self.sample_space_dimension]
             ).eval()
 
-        description_preamble = "Multivariate Normal random variable.\n\n"
+        description_preamble = "\n\nMultivariate Normal random variable.\n\n"
 
         for j in range(self.nb_of_independent_random_variables):
 
@@ -234,7 +234,7 @@ class MultivariateLogNormalTriL:
                 [-1, self.sample_space_dimension, self.sample_space_dimension]
             ).eval()
 
-        description_preamble = "Multivariate Normal random variable.\n\n"
+        description_preamble = "\n\nMultivariate Normal random variable.\n\n"
 
         for j in range(self.nb_of_independent_random_variables):
 
@@ -279,7 +279,7 @@ class Mixture:
 
     def get_description(self):
         descriptions = []
-        description_preamble = f"Mixture random variable with {self.number_of_components} components.\n\n"
+        description_preamble = f"\n\nMixture random variable with {self.number_of_components} components.\n\n"
         cat_descriptions = self.cat.get_description()
         component_descriptions = [component.get_description() for component in self.components]
 

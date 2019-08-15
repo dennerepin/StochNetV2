@@ -166,13 +166,16 @@ if __name__ == '__main__':
 
     print(">>> START")
     start = time()
-    dataset_id = int(sys.argv[1])
-    nb_settings = int(sys.argv[2])
-    nb_trajectories = int(sys.argv[3])
-    timestep = float(sys.argv[4])
-    endtime = float(sys.argv[5])
-    project_folder = str(sys.argv[6])
+    project_folder = str(sys.argv[1])
+    timestep = float(sys.argv[2])
+    dataset_id = int(sys.argv[3])
+    nb_settings = int(sys.argv[4])
+    nb_trajectories = int(sys.argv[5])
+    endtime = float(sys.argv[6])
     model_name = str(sys.argv[7])
+    random_seed = int(sys.argv[8])
+    
+    np.random.seed(random_seed)
 
     project_explorer = ProjectFileExplorer(project_folder)
     dataset_explorer = project_explorer.get_dataset_file_explorer(timestep, dataset_id)

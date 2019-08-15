@@ -6,6 +6,7 @@ import os
 import pickle
 from collections import namedtuple
 from functools import partial
+from sklearn.preprocessing.data import StandardScaler, MinMaxScaler
 from tqdm import tqdm
 
 from stochnet_v2.static_classes import nn_bodies
@@ -316,11 +317,19 @@ class StochNet:
             scaler = pickle.load(file)
         return scaler
 
-    def rescale(self, values):
-        return (values - self.scaler.mean_) / self.scaler.scale_
+    def rescale(self, data):
+        if isinstance(self.scaler, StandardScaler):
+            data = (data - self.scaler.mean_) / self.scaler.scale_
+        elif isinstance(self.scaler, MinMaxScaler):
+            data = (data * self.scaler.scale_) + self.scaler.min_
+        return data
 
-    def scale_back(self, values):
-        return values * self.scaler.scale_ + self.scaler.mean_
+    def scale_back(self, data):
+        if isinstance(self.scaler, StandardScaler):
+            data = data * self.scaler.scale_ + self.scaler.mean_
+        elif isinstance(self.scaler, MinMaxScaler):
+            data = (data - self.scaler.min_) / self.scaler.scale_
+        return data
 
     def predict(self, curr_state_values):
 

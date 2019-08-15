@@ -100,10 +100,14 @@ class HistogramFileExplorer:
     ):
         self.dataset_folder = dataset_folder
         self.model_id = model_id
-        self.histogram_folder = os.path.join(
+        self.model_histogram_folder = os.path.join(
             self.dataset_folder,
-            'histogram/model_%s' % self.model_id,
+            f'histogram/model_{self.model_id}',
+        )
+        self.histogram_folder = os.path.join(
+            self.model_histogram_folder,
             str(nb_steps),
         )
         maybe_create_dir(self.histogram_folder)
         self.log_fp = os.path.join(self.histogram_folder, 'log.txt')
+

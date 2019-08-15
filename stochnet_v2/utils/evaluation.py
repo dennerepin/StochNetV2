@@ -213,6 +213,7 @@ def evaluate(
         distance_kind='iou',
         with_timestamps=True,
         save_histograms=True,
+        time_lag_range=None,
         target_species_names=None,
         path_to_save_nn_traces=None,
         settings_idxs_to_save_histograms=None
@@ -294,6 +295,7 @@ def evaluate(
     print(f"Start calculating distances for different time-lags, using {count} CPU cores for multiprocessing")
     start = time()
     time_lags = list(range(n_steps - 1))
+
     species_distances = pool.map(task, time_lags)
     end = time()
     print(f"Took {end - start:.1f} seconds")
@@ -329,7 +331,7 @@ def evaluate(
             settings_idxs_to_save_histograms = [0]
 
         distance_fn = _histogram_distance if distance_kind == 'l1' else _iou_distance
-        time_lag_range = range(5, n_steps - 1, 10)
+        time_lag_range = time_lag_range or range(5, n_steps - 1, 10)
 
         print(
             f"Start building histograms for different settings: {settings_idxs_to_save_histograms}\n"
