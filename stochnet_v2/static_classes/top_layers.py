@@ -20,6 +20,11 @@ _EPS = 0.01
 MIXTURE_COMPONENTS_REGISTRY = Registry(name='MixtureComponentsDescriptionsRegistry')
 
 
+def _softplus_inverse(x):
+    """Helper which computes the function inverse of `tf.nn.softplus`."""
+    return tf.math.log(tf.math.expm1(x))
+
+
 class RandomVariableOutputLayer(abc.ABC):
 
     def __init__(self):
@@ -349,7 +354,8 @@ class MultivariateNormalDiagOutputLayer(RandomVariableOutputLayer):
 
                 diag = Dense(
                     self._sample_space_dimension,
-                    activation=tf.exp,
+                    # activation=tf.exp,
+                    activation=lambda x: tf.nn.softplus(x + _softplus_inverse(1.0)),
                     name='diag',
                     **self._diag_layer_params,
                 )(diag)
