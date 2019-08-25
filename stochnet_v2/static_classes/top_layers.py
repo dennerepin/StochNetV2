@@ -25,6 +25,18 @@ def _softplus_inverse(x):
     return tf.math.log(tf.math.expm1(x))
 
 
+def softplus_activation(x):
+    """Softplus activation"""
+    print("Using softplus activation for diagonal")
+    return tf.nn.softplus(x + _softplus_inverse(1.0))
+
+
+def nn_elu_activation(x):
+    """Computes the Non-Negative Exponential Linear Unit"""
+    print("Using non-nnegative elu activation for diagonal")
+    return tf.add(tf.constant(1, dtype=tf.float32), tf.nn.elu(x))
+
+
 class RandomVariableOutputLayer(abc.ABC):
 
     def __init__(self):
@@ -244,6 +256,8 @@ class CategoricalOutputLayer(RandomVariableOutputLayer):
                 name='logits',
                 **self._layer_params
             )(base)
+            
+            # TODO: try clipping?
 
             return logits
 
@@ -355,7 +369,8 @@ class MultivariateNormalDiagOutputLayer(RandomVariableOutputLayer):
                 diag = Dense(
                     self._sample_space_dimension,
                     # activation=tf.exp,
-                    activation=lambda x: tf.nn.softplus(x + _softplus_inverse(1.0)),
+                    # activation=softplus_activation,
+                    activation=nn_elu_activation,  # TODO
                     name='diag',
                     **self._diag_layer_params,
                 )(diag)
@@ -385,11 +400,12 @@ class MultivariateNormalDiagOutputLayer(RandomVariableOutputLayer):
 
     def loss_function(self, y_true, y_pred):
         loss = - self.log_likelihood(y_true, y_pred)
-        loss = tf.reshape(loss, [-1])
-        # loss = tf.math.reduce_mean(loss)
+        # loss = tf.reshape(loss, [-1])
+        loss = tf.math.reduce_mean(loss)
         return loss
 
     def log_likelihood(self, y_true, y_pred):
+        # TODO: check log-sum-exp trick?
         return self.get_random_variable(y_pred).log_prob(y_true)
 
 
@@ -502,7 +518,7 @@ class MultivariateNormalTriLOutputLayer(RandomVariableOutputLayer):
 
                 diag = Dense(
                     self._sample_space_dimension,
-                    activation=tf.exp,
+                    activation=tf.exp,  # TODO: add softplus/nnelu
                     name='diag',
                     **self._diag_layer_params,
                 )(diag)
@@ -556,8 +572,8 @@ class MultivariateNormalTriLOutputLayer(RandomVariableOutputLayer):
 
     def loss_function(self, y_true, y_pred):
         loss = - self.log_likelihood(y_true, y_pred)
-        loss = tf.reshape(loss, [-1])
-        # loss = tf.math.reduce_mean(loss)
+        # loss = tf.reshape(loss, [-1])
+        loss = tf.math.reduce_mean(loss)
         return loss
 
     def log_likelihood(self, y_true, y_pred):
@@ -733,8 +749,8 @@ class MixtureOutputLayer(RandomVariableOutputLayer):
 
     def loss_function(self, y_true, y_pred):
         loss = - self.log_likelihood(y_true, y_pred)
-        loss = tf.reshape(loss, [-1])
-        # loss = tf.math.reduce_mean(loss)
+        # loss = tf.reshape(loss, [-1])
+        loss = tf.math.reduce_mean(loss)
         return loss
 
     def log_likelihood(self, y_true, y_pred):

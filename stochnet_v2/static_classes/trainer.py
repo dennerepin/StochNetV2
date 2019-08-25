@@ -21,7 +21,7 @@ TrainOperations = namedtuple(
         'learning_rate',
         'loss',
         'global_step',
-        'increase_global_step',
+        # 'increase_global_step',
     ],
 )
 
@@ -154,8 +154,9 @@ class Trainer:
                 name='learning_rate',
             )
 
-            global_step = tf.Variable(0, trainable=False, name='global_step')
-            increase_global_step = tf.compat.v1.assign_add(global_step, 1)
+            # global_step = tf.Variable(0, trainable=False, name='global_step')
+            # increase_global_step = tf.compat.v1.assign_add(global_step, 1)
+            global_step = tf.train.get_or_create_global_step()
 
             optimizer_type = learning_strategy.optimizer_type.lower()
             if optimizer_type == 'adam':
@@ -166,14 +167,17 @@ class Trainer:
                 raise NotImplementedError(f'optimizer "{optimizer_type}" is not supported')
 
             gradients = optimizer.compute_gradients(loss, var_list=tf.compat.v1.trainable_variables())
-            gradients = optimizer.apply_gradients(gradients)
+            gradients = optimizer.apply_gradients(
+                gradients,
+                global_step,  # instead of increase_global_step
+            )
 
             train_operations = TrainOperations(
                 gradients,
                 learning_rate,
                 loss,
                 global_step,
-                increase_global_step,
+                # increase_global_step,
             )
             train_input_x = model_input
             train_input_y = rv_output
@@ -256,8 +260,8 @@ class Trainer:
 
         summary_writer = tf.compat.v1.summary.FileWriter(tensorboard_log_dir, session.graph)
         learning_rate_summary = tf.compat.v1.summary.scalar('train_learning_rate', train_operations.learning_rate)
-        # train_loss_summary = tf.compat.v1.summary.scalar('train_loss', train_operations.loss)  # TODO: FOR SCALAR LOSS
-        train_loss_summary = tf.compat.v1.summary.scalar('train_loss', tf.reduce_mean(train_operations.loss))  # TODO: FOR VECTOR LOSS
+        train_loss_summary = tf.compat.v1.summary.scalar('train_loss', train_operations.loss)  # TODO: FOR SCALAR LOSS
+        # train_loss_summary = tf.compat.v1.summary.scalar('train_loss', tf.reduce_mean(train_operations.loss))  # TODO: FOR VECTOR LOSS
         test_mean_loss_ph = tf.compat.v1.placeholder(tf.float32, ())
         test_loss_summary = tf.compat.v1.summary.scalar('test_mean_loss', test_mean_loss_ph)
 
@@ -289,7 +293,6 @@ class Trainer:
         initial_learning_rate = session.run(train_operations.learning_rate)
         learning_rate = initial_learning_rate
 
-        global_step = session.run(train_operations.global_step)
         decay_step = 0
         tolerance_step = 0
         nans_step_counter = 0
@@ -324,7 +327,7 @@ class Trainer:
             }
 
             res = session.run(fetches=fetches, feed_dict=feed_dict)
-            res['loss'] = np.mean(res['loss'])  # TODO: FOR VECTOR LOSS
+            # res['loss'] = np.mean(res['loss'])  # TODO: FOR VECTOR LOSS
             return res
 
         def _run_test():
@@ -340,6 +343,7 @@ class Trainer:
                 }
 
                 res = session.run(fetches=fetches, feed_dict=feed_dict)
+                # res['loss'] = np.mean(res['loss'])  # TODO: FOR VECTOR LOSS
                 test_losses.append(res['loss'])
 
             test_mean_loss = np.mean(test_losses)
@@ -366,8 +370,8 @@ class Trainer:
 
         def _maybe_drop_lr_tolerance(lr, tol_step, tol_best_loss):
             if learning_strategy.__class__.__name__ == 'ToleranceDropLearningStrategy':
-                if tol_best_loss < tol_best_loss:
-                    tol_best_loss = tol_best_loss
+                if best_loss < tol_best_loss:
+                    tol_best_loss = best_loss
                     tol_step = 0
                 else:
                     tol_step += 1
@@ -377,6 +381,7 @@ class Trainer:
                         lr * learning_strategy.lr_decay
                     )
                     tol_step = 0
+                    print(f"drop lr: {lr}")
             return lr, tol_step, tol_best_loss
 
         def _maybe_drop_lr_decay(lr):
@@ -427,14 +432,12 @@ class Trainer:
             kind=dataset_kind,
         )
 
-        regular_checkpoints_saver.save(session, _get_regular_checkpoint_path(global_step))
-
         LOGGER.info('Training...')
 
         for epoch in range(n_epochs):
 
             epoch_start_time = time()
-            epoch_start_step = global_step
+            epoch_steps = 0
 
             LOGGER.info(f'\nEpoch: {epoch + 1}')
 
@@ -455,7 +458,7 @@ class Trainer:
                 summary_writer.add_summary(result['loss_summary'], global_step)
 
                 # TODO: TMP, categorical logits and probs summaries:
-                if global_step % 100 == 0:
+                if global_step % 300 == 0:
                     _run_cat_histograms()
                 # TODO: end of TMP
 
@@ -477,9 +480,8 @@ class Trainer:
                             _reset_optimizer()
                             decay_step = 0
 
-                # increase global step
-                session.run(train_operations.increase_global_step)
                 decay_step += 1
+                epoch_steps += 1
 
             # drop lr for next epoch if train with tolerance
             learning_rate, tolerance_step, tolerance_best_loss = _maybe_drop_lr_tolerance(
@@ -489,7 +491,6 @@ class Trainer:
             _run_histograms()
 
             epoch_time = time() - epoch_start_time
-            epoch_steps = global_step - epoch_start_step
             avg_step_time = epoch_time / epoch_steps
 
             # TEST

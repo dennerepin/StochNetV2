@@ -393,6 +393,7 @@ class StochNet:
     ):
         n_settings, *state_shape = curr_state_values.shape
         traces = np.zeros((n_steps + 1, n_traces, n_settings, *state_shape))
+        zero_level = self.rescale(np.zeros_like(curr_state_values))
 
         if not curr_state_rescaled:
             curr_state_values = self.rescale(curr_state_values)
@@ -407,6 +408,7 @@ class StochNet:
                 round_result=False,
                 n_samples=n_traces,
             )
+        next_state_values = np.fmax(next_state_values, zero_level)
         traces[1] = next_state_values
 
         # for step in tqdm(range(2, n_steps + 1)):
@@ -426,6 +428,7 @@ class StochNet:
         print(f'iterate through {"traces" if iterate_through_traces else "settings"}')
 
         if iterate_through_traces:
+            zero_level = self.rescale(np.zeros_like(next_state_values[0]))
             for trace_idx in tqdm(range(n_traces)):
                 state_values = next_state_values[trace_idx]
                 for step in range(2, n_steps + 1):
@@ -437,8 +440,10 @@ class StochNet:
                         n_samples=1,
                     )
                     state_values = np.squeeze(state_values, 0)
+                    state_values = np.fmax(state_values, zero_level)
                     traces[step, trace_idx] = state_values
         else:
+            zero_level = self.rescale(np.zeros_like(next_state_values[:, 0]))
             for setting_idx in tqdm(range(n_settings)):
                 state_values = next_state_values[:, setting_idx]
                 for step in range(2, n_steps + 1):
@@ -450,6 +455,7 @@ class StochNet:
                         n_samples=1,
                     )
                     state_values = np.squeeze(state_values, 0)
+                    state_values = np.fmax(state_values, zero_level)
                     traces[step, :, setting_idx] = state_values
 
         # [n_steps, n_settings, n_settings, 1, nb_features] -> [n_steps, n_traces, n_settings, nb_features]

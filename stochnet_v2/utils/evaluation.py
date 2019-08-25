@@ -160,7 +160,7 @@ def get_distance(
         target_species_idxs=None,
         histogram_bounds=None,
         with_timestamps=True,
-        kind='l1',
+        kind='dist',
         return_histograms=True,
 ):
     if histogram_bounds is None:
@@ -189,12 +189,12 @@ def get_distance(
         histogram_bounds=histogram_bounds,
         with_timestamps=with_timestamps,
     )
-    if kind == 'l1':
+    if kind == 'dist':
         distance_fn = _histogram_distance
     elif kind == 'iou':
         distance_fn = _iou_distance
     else:
-        raise ValueError("`kind` parameter unrecognized: {kind}. Should be one of: 'l1', 'iou'")
+        raise ValueError("`kind` parameter unrecognized: {kind}. Should be one of: 'dist', 'iou'")
 
     distance = distance_fn(histograms_1, histograms_2)
 
@@ -256,26 +256,6 @@ def evaluate(
     )
     end = time()
     print(f"Took {end - start:.1f} seconds")
-
-    # print(f"Start calculating distances for different time-lags")
-    # species_distances = []
-    # mean_distances = []
-    #
-    # for time_lag in range(n_steps - 1):
-    #     dist_i, *_ = get_distance(
-    #         data_1=histogram_data,
-    #         data_2=traces,
-    #         time_lag=time_lag,
-    #         n_bins=n_bins,
-    #         with_timestamps=with_timestamps,
-    #         target_species_idxs=target_species_idxs,
-    #         histogram_bounds=None,
-    #         kind=distance_kind,
-    #     )
-    #
-    #     species_distances.append(dist_i)
-    #     mean_distances.append(np.mean(dist_i))
-    # print(f"Took {end - start:.1f} seconds")
 
     count = (multiprocessing.cpu_count() // 4) * 3 + 1
     pool = multiprocessing.Pool(processes=count)
@@ -366,19 +346,25 @@ def evaluate(
                 kind=distance_kind,
                 return_histograms=True,
             )
-
+            self_dist_dict = {
+                name: self_dist[idx]
+                for idx, name in enumerate(target_species_names)
+            }
             dist_dict = {
                 name: species_distances[idx]
                 for idx, name in enumerate(target_species_names)
             }
             with open(histogram_explorer.log_fp, 'w') as f:
                 f.write(
-                    f"Dataset mean self-distance ({distance_kind}): {np.mean(self_dist):.4f}\n\n"
-                    f"Mean histogram distance ({distance_kind}): {np.mean(species_distances):.4f}\n\n"
+                    f"Dataset mean self-distance ({distance_kind}): {np.mean(self_dist):.4f}\n"
+                    f"Mean histogram distance ({distance_kind}): {np.mean(species_distances):.4f}\n"
                 )
-                f.write(
-                    f"Species histogram distances ({distance_kind}):\n"
-                )
+
+                f.write(f"\nDataset self-distances ({distance_kind}):\n")
+                for k, v in self_dist_dict.items():
+                    f.write(f"\t{k}: {v:.4f}\n")
+
+                f.write(f"\nSpecies histogram distances ({distance_kind}):\n")
                 for k, v in dist_dict.items():
                     f.write(f"\t{k}: {v:.4f}\n")
 
@@ -404,18 +390,18 @@ def evaluate(
                         f"{distance_kind}: {curr_setting_distance}, "
                         f"mean ({n_settings} settings): {species_distances[species_idx]:.4f}"
                     )
-                    # plt.plot(*histograms_1[setting_idx, species_idx], '.-', label='gillespy')
-                    # plt.plot(*histograms_2[setting_idx, species_idx], '.-', label='NN')
-                    plt.bar(
-                        list(range(histograms_1.shape[-1])),
-                        histograms_1[setting_idx, species_idx, 1],
-                        label='gillespy', alpha=0.7
-                    )
-                    plt.bar(
-                        list(range(histograms_2.shape[-1])),
-                        histograms_2[setting_idx, species_idx, 1],
-                        label='NN', alpha=0.7
-                    )
+                    plt.plot(*histograms_1[setting_idx, species_idx], '-', label='gillespy')
+                    plt.plot(*histograms_2[setting_idx, species_idx], '-', label='NN')
+                    # plt.bar(
+                    #     list(range(histograms_1.shape[-1])),
+                    #     histograms_1[setting_idx, species_idx, 1],
+                    #     label='gillespy', alpha=0.7
+                    # )
+                    # plt.bar(
+                    #     list(range(histograms_2.shape[-1])),
+                    #     histograms_2[setting_idx, species_idx, 1],
+                    #     label='NN', alpha=0.7
+                    # )
                     plt.legend()
                     plt.savefig(save_path)
                     plt.close(fig)
