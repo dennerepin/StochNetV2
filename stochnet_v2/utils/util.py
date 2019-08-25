@@ -14,10 +14,10 @@ def maybe_create_dir(dir_path, erase_existing=False):
             os.makedirs(dir_path)
 
 
-def copy_graph(src_graph, dst_graph, dst_scope=None):
+def copy_graph(src_graph, dst_graph, dst_scope=None, **kwargs):
     src_meta_graph = tf.compat.v1.train.export_meta_graph(graph=src_graph)
     with dst_graph.as_default():
-        tf.compat.v1.train.import_meta_graph(src_meta_graph, import_scope=dst_scope)
+        tf.compat.v1.train.import_meta_graph(src_meta_graph, import_scope=dst_scope, **kwargs)
 
 
 def get_transformed_tensor(src_tensor, dst_graph, dst_scope=''):

@@ -344,6 +344,7 @@ class DataTransformer:
             positivity=True,
             shuffle=True,
             slice_size=None,
+            force_rewrite=False,
     ):
         train_gen, test_gen = self.get_train_test_data_generators(
             nb_past_timesteps=nb_past_timesteps,
@@ -362,6 +363,12 @@ class DataTransformer:
         else:
             train_fp = os.path.join(dataset_folder, 'train.tfrecords')
             test_fp = os.path.join(dataset_folder, 'test.tfrecords')
+
+        if force_rewrite:
+            if os.path.exists(train_fp):
+                os.remove(train_fp)
+            if os.path.exists(test_fp):
+                os.remove(test_fp)
 
         def _float_feature(value):
             return tf.train.Feature(float_list=tf.train.FloatList(value=value))
@@ -425,8 +432,10 @@ class HDF5Dataset(BaseDataset):
             data_file_path,
             batch_size,
             shuffle=True,
+            preprocess_fn=None,
     ):
         self._data_file_path = data_file_path
+        self._preprocess_fn = preprocess_fn
 
         super().__init__(
             batch_size,
@@ -450,10 +459,16 @@ class HDF5Dataset(BaseDataset):
             for batch_idx in batch_idxs:
                 start = batch_idx * bs
                 end = (batch_idx + 1) * bs
-                yield x[start:end], y[start:end]
+                x_batch, y_batch = x[start:end], y[start:end]
+                if self._preprocess_fn is not None:
+                    x_batch, y_batch = self._preprocess_fn(x_batch, y_batch)
+                yield x_batch, y_batch
 
             if self._drop_remainder is False:
-                yield x[n_batches * bs:-1], y[n_batches * bs:-1]
+                x_batch, y_batch = x[n_batches * bs:-1], y[n_batches * bs:-1]
+                if self._preprocess_fn is not None:
+                    x_batch, y_batch = self._preprocess_fn(x_batch, y_batch)
+                yield x_batch, y_batch
 
 
 class TFRecordsDataset(BaseDataset):
@@ -464,12 +479,13 @@ class TFRecordsDataset(BaseDataset):
             batch_size,
             prefetch_size=None,
             shuffle=True,
-            shuffle_buffer_size=100,
+            shuffle_buffer_size=10000,
             nb_past_timesteps=None,
             nb_features=None,
+            preprocess_fn=None,
     ):
         self._records_paths = records_paths
-        self._nb_past_timesteps= nb_past_timesteps
+        self._nb_past_timesteps = nb_past_timesteps
         self._nb_features = nb_features
         self._x_len = None
         self._y_len = None
@@ -483,6 +499,7 @@ class TFRecordsDataset(BaseDataset):
 
         self._prefetch_size = prefetch_size or -1
         self._shuffle_buffer_size = shuffle_buffer_size
+        self._preprocess_fn = preprocess_fn
 
         super().__init__(
             batch_size,
@@ -520,6 +537,7 @@ class TFRecordsDataset(BaseDataset):
         )
         x = features['x']
         x = tf.reshape(x, features['x_shape'])
+        x.set_shape([self._nb_past_timesteps, self._nb_features])
         y = features['y']
 
         return x, y
@@ -543,24 +561,18 @@ class TFRecordsDataset(BaseDataset):
         return x, y
 
     def create_dataset(self, graph=None):
-        if graph is not None:
-            with graph.as_default():
-                dataset = self._create_dataset()
-                dataset = dataset.batch(self._batch_size, drop_remainder=self._drop_remainder)
-                if self._shuffle is True:
-                    dataset = dataset.shuffle(buffer_size=self._shuffle_buffer_size)
-                dataset = dataset.prefetch(self._prefetch_size)
-        else:
+        graph = graph or tf.compat.v1.get_default_graph()
+        with graph.as_default():
             dataset = self._create_dataset()
-            # TODO: move shuffle after batching
-            if self._shuffle is True:
-                dataset = dataset.shuffle(buffer_size=self._shuffle_buffer_size)
-            dataset = dataset.batch(self._batch_size, drop_remainder=self._drop_remainder)
-            dataset = dataset.prefetch(self._prefetch_size)
-
         return dataset
 
     def _create_dataset(self):
         dataset = tf.data.TFRecordDataset(self._records_paths)
         dataset = dataset.map(self._parse_record)
+        if self._preprocess_fn is not None:
+            dataset = dataset.map(self._preprocess_fn)
+        if self._shuffle is True:
+            dataset = dataset.shuffle(buffer_size=self._shuffle_buffer_size)
+        dataset = dataset.batch(self._batch_size, drop_remainder=self._drop_remainder)
+        dataset = dataset.prefetch(self._prefetch_size)
         return dataset

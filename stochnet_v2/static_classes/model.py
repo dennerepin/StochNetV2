@@ -166,8 +166,11 @@ class StochNet:
 
     def _build_main_graph(self, body_fn, mixture_config_path):
         self.input_placeholder = tf.compat.v1.placeholder(
-            tf.float32, (None, self.nb_past_timesteps, self.nb_features))
-        self.rv_output_ph = tf.compat.v1.placeholder(tf.float32, (None, self.nb_features))
+            tf.float32, (None, self.nb_past_timesteps, self.nb_features), name="input"
+        )
+        self.rv_output_ph = tf.compat.v1.placeholder(
+            tf.float32, (None, self.nb_features), name="random_variable_output"
+        )
         body = body_fn(self.input_placeholder)
         self.top_layer_obj = _get_mixture(mixture_config_path, sample_space_dimension=self.nb_features)
         self.pred_tensor = self.top_layer_obj.add_layer_on_top(body)
