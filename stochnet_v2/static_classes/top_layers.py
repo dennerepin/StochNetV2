@@ -346,17 +346,17 @@ class MultivariateNormalDiagOutputLayer(RandomVariableOutputLayer):
                     with tf.variable_scope('residual'):
 
                         with tf.variable_scope('mu'):
-                            mu = self._activation_fn(mu)
                             mu = Dense(self.hidden_size, **self._mu_layer_params)(mu)
-                            mu1 = self._activation_fn(mu)
-                            mu1 = Dense(self.hidden_size, **self._mu_layer_params)(mu1)
+                            mu = self._activation_fn(mu)
+                            mu1 = Dense(self.hidden_size, **self._mu_layer_params)(mu)
+                            mu1 = self._activation_fn(mu1)
                             mu = tf.add(mu, mu1)
 
                         with tf.variable_scope('diag'):
-                            diag = self._activation_fn(diag)
                             diag = Dense(self.hidden_size, **self._diag_layer_params)(diag)
-                            diag1 = self._activation_fn(diag)
-                            diag1 = Dense(self.hidden_size, **self._diag_layer_params)(diag1)
+                            diag = self._activation_fn(diag)
+                            diag1 = Dense(self.hidden_size, **self._diag_layer_params)(diag)
+                            diag1 = self._activation_fn(diag1)
                             diag = tf.add(diag, diag1)
 
                 mu = Dense(
@@ -489,24 +489,24 @@ class MultivariateNormalTriLOutputLayer(RandomVariableOutputLayer):
                     with tf.variable_scope('residual'):
 
                         with tf.variable_scope('mu'):
-                            mu = self._activation_fn(mu)
                             mu = Dense(self.hidden_size, **self._mu_layer_params)(mu)
-                            mu1 = self._activation_fn(mu)
-                            mu1 = Dense(self.hidden_size, **self._mu_layer_params)(mu1)
+                            mu = self._activation_fn(mu)
+                            mu1 = Dense(self.hidden_size, **self._mu_layer_params)(mu)
+                            mu1 = self._activation_fn(mu1)
                             mu = tf.add(mu, mu1)
 
                         with tf.variable_scope('diag'):
-                            diag = self._activation_fn(diag)
                             diag = Dense(self.hidden_size, **self._diag_layer_params)(diag)
-                            diag1 = self._activation_fn(diag)
-                            diag1 = Dense(self.hidden_size, **self._diag_layer_params)(diag1)
+                            diag = self._activation_fn(diag)
+                            diag1 = Dense(self.hidden_size, **self._diag_layer_params)(diag)
+                            diag1 = self._activation_fn(diag1)
                             diag = tf.add(diag, diag1)
 
                         with tf.variable_scope('sub_diag'):
+                            sub_diag = Dense(self.hidden_size, **self._diag_layer_params)(sub_diag)
                             sub_diag = self._activation_fn(sub_diag)
-                            sub_diag = Dense(self.hidden_size, **self._sub_diag_layer_params)(sub_diag)
-                            sub_diag1 = self._activation_fn(sub_diag)
-                            sub_diag1 = Dense(self.hidden_size, **self._sub_diag_layer_params)(sub_diag1)
+                            sub_diag1 = Dense(self.hidden_size, **self._diag_layer_params)(sub_diag)
+                            sub_diag1 = self._activation_fn(sub_diag1)
                             sub_diag = tf.add(sub_diag, sub_diag1)
 
                 mu = Dense(
@@ -518,7 +518,9 @@ class MultivariateNormalTriLOutputLayer(RandomVariableOutputLayer):
 
                 diag = Dense(
                     self._sample_space_dimension,
-                    activation=tf.exp,  # TODO: add softplus/nnelu
+                    # activation=tf.exp,
+                    # activation=softplus_activation,
+                    activation=nn_elu_activation,  # TODO
                     name='diag',
                     **self._diag_layer_params,
                 )(diag)

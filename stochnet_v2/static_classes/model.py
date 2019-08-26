@@ -63,16 +63,7 @@ def _get_mixture(config, sample_space_dimension):
 
 
 def get_body_fn(config):
-
-    body_fn_name = config.pop('body_fn', None)
-    if body_fn_name is None:
-        raise ValueError(f"`body_fn` parameter not specified in config")
-
-    body_fn = getattr(nn_bodies, body_fn_name, None)
-    if body_fn is None:
-        raise ValueError(f"`body_fn` name {body_fn_name} not found in {nn_bodies.__file__}")
-
-    return partial(body_fn, **config)
+    return partial(nn_bodies.body_main, **config)
 
 
 class StochNet:
