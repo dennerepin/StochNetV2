@@ -9,7 +9,9 @@ from stochnet_v2.utils.registry import REGULARIZERS_REGISTRY
 
 BatchNorm = tf.compat.v1.layers.BatchNormalization
 Dense = tf.layers.Dense
-
+# initializer = tf.initializers.glorot_normal
+initializer = tf.compat.v1.initializers.variance_scaling(mode='fan_out', distribution="truncated_normal")
+# initializer = None
 
 BODY_FN_REGISTRY = Registry(name="BodyFunctionsRegistry")
 RESIDUAL_BLOCKS_REGISTRY = Registry(name="ResidualBlocksRegistry")
@@ -28,12 +30,12 @@ RESIDUAL_BLOCKS_REGISTRY = Registry(name="ResidualBlocksRegistry")
 #         x,
 #         hidden_size,
 #         activation,
-#         regularization_params,
+#         params_dict,
 # ):
-#     h1 = Dense(hidden_size, **regularization_params)(x)
+#     h1 = Dense(hidden_size, **params_dict)(x)
 #     h1 = activation(h1)
 #
-#     h2 = Dense(hidden_size, **regularization_params)(h1)
+#     h2 = Dense(hidden_size, **params_dict)(h1)
 #     h2 = activation(h2)
 #
 #     h2 = tf.add(h1, h2)
@@ -41,19 +43,19 @@ RESIDUAL_BLOCKS_REGISTRY = Registry(name="ResidualBlocksRegistry")
 
 
 @RESIDUAL_BLOCKS_REGISTRY.register("a")
-def _residual_block_a(
+def residual_block_a(
         x,
         hidden_size,
         activation,
-        regularization_params,
+        params_dict,
         use_batch_norm=False,
 ):
-    h1 = Dense(hidden_size, **regularization_params)(x)
+    h1 = Dense(hidden_size, **params_dict)(x)
     h1 = activation(h1)
     if use_batch_norm:
         h1 = BatchNorm()(h1)
 
-    h2 = Dense(hidden_size, **regularization_params)(h1)
+    h2 = Dense(hidden_size, **params_dict)(h1)
     h2 = activation(h2)
     if use_batch_norm:
         h2 = BatchNorm()(h2)
@@ -63,23 +65,23 @@ def _residual_block_a(
 
 
 @RESIDUAL_BLOCKS_REGISTRY.register("b")
-def _residual_block_b(
+def residual_block_b(
         x,
         hidden_size,
         activation,
-        regularization_params,
+        params_dict,
         use_batch_norm=False,
 ):
     if use_batch_norm:
         x = BatchNorm()(x)
-    h1 = Dense(hidden_size, **regularization_params)(x)
+    h1 = Dense(hidden_size, **params_dict)(x)
     h1 = activation(h1)
 
     if use_batch_norm:
         h2 = BatchNorm()(h1)
     else:
         h2 = h1
-    h2 = Dense(hidden_size, **regularization_params)(h2)
+    h2 = Dense(hidden_size, **params_dict)(h2)
     h2 = activation(h2)
 
     h2 = tf.add(h1, h2)
@@ -88,15 +90,15 @@ def _residual_block_b(
 
 # FOR body_b
 @RESIDUAL_BLOCKS_REGISTRY.register("c")
-def _residual_block_c(
+def residual_block_c(
         x,
         hidden_size,
         activation,
-        regularization_params,
+        params_dict,
         use_batch_norm=False,
 ):
 
-    h1 = Dense(hidden_size, **regularization_params)(x)
+    h1 = Dense(hidden_size, **params_dict)(x)
     h1 = activation(h1)
     if use_batch_norm:
         h1 = BatchNorm()(h1)
@@ -112,14 +114,14 @@ def body_a(
         residual_block_fn,
         use_batch_norm,
         activation_fn,
-        regularization_params,
+        params_dict,
 ):
     for _ in range(n_residual_blocks):
         x = residual_block_fn(
             x,
             hidden_size,
             activation_fn,
-            regularization_params,
+            params_dict,
             use_batch_norm=use_batch_norm
         )
 
@@ -134,9 +136,9 @@ def body_b(
         residual_block_fn,
         use_batch_norm,
         activation_fn,
-        regularization_params,
+        params_dict,
 ):
-    x = Dense(hidden_size, **regularization_params)(x)
+    x = Dense(hidden_size, **params_dict)(x)
     x = activation_fn(x)
     if use_batch_norm:
         x = BatchNorm()(x)
@@ -146,7 +148,7 @@ def body_b(
             x,
             hidden_size,
             activation_fn,
-            regularization_params,
+            params_dict,
             use_batch_norm=use_batch_norm
         )
 
@@ -181,12 +183,13 @@ def body_main(
         f" ** "
         f"\n"
     )
-    regularization_params = {
+    params_dict = {
         'activity_regularizer': REGULARIZERS_REGISTRY[activity_regularizer],
         'kernel_constraint': CONSTRAINTS_REGISTRY[kernel_constraint],
         'kernel_regularizer': REGULARIZERS_REGISTRY[kernel_regularizer],
         'bias_constraint': CONSTRAINTS_REGISTRY[bias_constraint],
         'bias_regularizer': REGULARIZERS_REGISTRY[bias_regularizer],
+        'kernel_initializer': initializer,  # TODO
     }
     body_fn = BODY_FN_REGISTRY[body_fn_name]
     residual_block_fn = RESIDUAL_BLOCKS_REGISTRY[residual_block_name]
@@ -202,7 +205,7 @@ def body_main(
         residual_block_fn=residual_block_fn,
         use_batch_norm=use_batch_norm,
         activation_fn=activation_fn,
-        regularization_params=regularization_params,
+        params_dict=params_dict,
     )
 
     return x

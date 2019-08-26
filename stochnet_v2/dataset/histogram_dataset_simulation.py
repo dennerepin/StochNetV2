@@ -1,3 +1,4 @@
+import argparse
 import h5py
 import numpy as np
 import os
@@ -5,10 +6,16 @@ import sys
 
 from time import time
 
-path = os.path.dirname(__file__)
-sys.path.append(os.path.join(path, '../..'))
-from stochnet_v2.utils.file_organisation import ProjectFileExplorer
-from stochnet_v2.dataset.dataset_simulation import build_simulation_dataset
+parser = argparse.ArgumentParser()
+parser.add_argument('--project_folder', type=str, required=True)
+parser.add_argument('--timestep', type=float, required=True)
+parser.add_argument('--dataset_id', type=int, required=True)
+parser.add_argument('--nb_settings', type=int, required=True)
+parser.add_argument('--nb_trajectories', type=int, required=True)
+parser.add_argument('--endtime', type=float, required=True)
+parser.add_argument('--model_name', type=str, required=True)
+parser.add_argument('--random_seed', type=int, default=23)
+args = parser.parse_args()
 
 
 def get_histogram_settings(
@@ -31,57 +38,64 @@ def get_histogram_settings(
     return settings
 
 
-if __name__ == '__main__':
+def main():
+    path = os.path.dirname(__file__)
+    sys.path.append(os.path.join(path, '../..'))
+    from stochnet_v2.utils.file_organisation import ProjectFileExplorer
+    from stochnet_v2.dataset.dataset_simulation import build_simulation_dataset
+
     start = time()
 
-    project_folder = str(sys.argv[1])
-    source_dataset_timestep = float(sys.argv[2])
-    source_dataset_id = int(sys.argv[3])
-    nb_histogram_settings = int(sys.argv[4])
-    nb_trajectories = int(sys.argv[5])
-    endtime = float(sys.argv[6])
-    model_name = str(sys.argv[7])
-    random_seed = int(sys.argv[8])
+    np.random.seed(args.random_seed)
 
-    np.random.seed(random_seed)
-
-    project_explorer = ProjectFileExplorer(project_folder)
+    project_explorer = ProjectFileExplorer(args.project_folder)
     dataset_explorer = project_explorer.get_dataset_file_explorer(
-        source_dataset_timestep,
-        source_dataset_id
+        args.timestep,
+        args.dataset_id
     )
 
     settings = get_histogram_settings(
-        nb_histogram_settings,
+        args.nb_settings,
         dataset_explorer.train_fp
     )
-    with open(dataset_explorer.histogram_settings_fp, 'wb') as file:
-        np.save(file, settings)
+    np.save(dataset_explorer.histogram_settings_fp, settings)
 
     histogram_dataset = build_simulation_dataset(
-        model_name,
-        nb_histogram_settings,
-        nb_trajectories,
-        source_dataset_timestep,
-        endtime,
+        args.model_name,
+        args.nb_settings,
+        args.nb_trajectories,
+        args.timestep,
+        args.endtime,
         dataset_explorer.dataset_folder,
         prefix='histogram_partial_',
         how='stack',
         settings_filename=os.path.basename(dataset_explorer.histogram_settings_fp),
     )
-    with open(dataset_explorer.histogram_dataset_fp, 'wb') as file:
-        np.save(file, histogram_dataset)
+    np.save(dataset_explorer.histogram_dataset_fp, histogram_dataset)
 
     end = time()
     execution_time = end - start
 
     with open(dataset_explorer.log_fp, 'a') as file:
         file.write(
-            f"Simulating {nb_trajectories} {model_name} histogram trajectories "
-            f"for {nb_histogram_settings} different settings until {endtime} "
+            f"Simulating {args.nb_trajectories} {args.model_name} histogram trajectories "
+            f"for {args.nb_settings} different settings until {args.endtime} "
             f"took {execution_time} seconds.\n"
         )
 
 
-# python stochnet_v2/dataset/histogram_dataset_simulation.py '/home/dn/Documents/tmp/tmp_simulations' 0.5 3 20 1000 30 EGFR 11
-# python stochnet_v2/dataset/histogram_dataset_simulation.py '/home/dn/DATA/Gene' 400 1 25 1000 10000 'Gene' 11
+if __name__ == '__main__':
+    main()
+
+
+"""
+python stochnet_v2/dataset/histogram_dataset_simulation.py \
+       --project_folder='/home/dn/DATA/Gene' \
+       --timestep=400 \
+       --dataset_id=3 \
+       --nb_settings=2 \
+       --nb_trajectories=5 \
+       --endtime=10000 \
+       --model_name='Gene' \
+       --random_seed=43
+"""

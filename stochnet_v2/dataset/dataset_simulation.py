@@ -1,3 +1,4 @@
+import argparse
 import multiprocessing
 import numpy as np
 import os
@@ -9,9 +10,16 @@ from importlib import import_module
 from tqdm import tqdm
 from time import time
 
-# path = os.path.dirname(__file__)
-# sys.path.append(os.path.join(path, '../..'))
-# from stochnet_v2.utils.file_organisation import ProjectFileExplorer
+parser = argparse.ArgumentParser()
+parser.add_argument('--project_folder', type=str, required=True)
+parser.add_argument('--timestep', type=float, required=True)
+parser.add_argument('--dataset_id', type=int, required=True)
+parser.add_argument('--nb_settings', type=int, required=True)
+parser.add_argument('--nb_trajectories', type=int, required=True)
+parser.add_argument('--endtime', type=float, required=True)
+parser.add_argument('--model_name', type=str, required=True)
+parser.add_argument('--random_seed', type=int, default=23)
+args = parser.parse_args()
 
 
 def build_simulation_dataset(
@@ -102,9 +110,9 @@ def perform_simulations(
     settings_fp = os.path.join(dataset_folder, settings_filename)
     settings = np.load(settings_fp)
 
-    CRN_module = import_module("stochnet_v2.CRN_models." + model_name)
-    CRN_class = getattr(CRN_module, model_name)
-    CRN = CRN_class(endtime, timestep)
+    crn_module = import_module("stochnet_v2.CRN_models." + model_name)
+    crn_class = getattr(crn_module, model_name)
+    crn_instance = crn_class(endtime, timestep)
 
     count = (multiprocessing.cpu_count() // 3) * 2 + 1
     print(" ===== CPU Cores used for simulations: %s =====" % count)
@@ -114,7 +122,7 @@ def perform_simulations(
 
     task = partial(
         single_simulation,
-        CRN=CRN,
+        crn_instance=crn_instance,
         nb_trajectories=nb_trajectories,
         dataset_folder=dataset_folder,
         prefix=prefix
@@ -127,14 +135,14 @@ def perform_simulations(
 def single_simulation(
         initial_values,
         id_number,
-        CRN,
+        crn_instance,
         nb_trajectories,
         dataset_folder,
         prefix,
 ):
 
-    CRN.set_species_initial_value(initial_values)
-    trajectories = CRN.run(
+    crn_instance.set_species_initial_value(initial_values)
+    trajectories = crn_instance.run(
         number_of_trajectories=nb_trajectories,
         solver=StochKitSolver,
         show_labels=False
@@ -153,63 +161,50 @@ def save_simulation_data(
     partial_dataset_filepath = os.path.join(dataset_folder,
                                             partial_dataset_filename)
     print(f"Saving to partial_dataset_filepath: {partial_dataset_filepath}")
-    with open(partial_dataset_filepath, 'wb') as file:
-        np.save(file, data)
+    np.save(partial_dataset_filepath, data)
     print("Saved.")
     return
 
 
-if __name__ == '__main__':
+def main():
+
     path = os.path.dirname(__file__)
     sys.path.append(os.path.join(path, '../..'))
     from stochnet_v2.utils.file_organisation import ProjectFileExplorer
 
     print(">>> START")
     start = time()
-    project_folder = str(sys.argv[1])
-    timestep = float(sys.argv[2])
-    dataset_id = int(sys.argv[3])
-    nb_settings = int(sys.argv[4])
-    nb_trajectories = int(sys.argv[5])
-    endtime = float(sys.argv[6])
-    model_name = str(sys.argv[7])
-    random_seed = int(sys.argv[8])
-    
-    np.random.seed(random_seed)
 
-    project_explorer = ProjectFileExplorer(project_folder)
-    dataset_explorer = project_explorer.get_dataset_file_explorer(timestep, dataset_id)
+    np.random.seed(args.random_seed)
 
-    CRN_module = import_module("stochnet_v2.CRN_models." + model_name)
-    CRN_class = getattr(CRN_module, model_name)
-    settings = CRN_class.get_initial_settings(nb_settings)
-    settings_fp = os.path.join(dataset_explorer.dataset_folder, 'settings.npy')
+    project_explorer = ProjectFileExplorer(args.project_folder)
+    dataset_explorer = project_explorer.get_dataset_file_explorer(args.timestep, args.dataset_id)
 
-    np.save(settings_fp, settings)
-    nb_settings = settings.shape[0]
+    crn_module = import_module("stochnet_v2.CRN_models." + args.model_name)
+    crn_class = getattr(crn_module, args.model_name)
+    settings = crn_class.get_initial_settings(args.nb_settings)
+    np.save(dataset_explorer.settings_fp, settings)
 
     print(f"Dataset folder: {dataset_explorer.dataset_folder}")
 
     dataset = build_simulation_dataset(
-        model_name,
-        nb_settings,
-        nb_trajectories,
-        timestep,
-        endtime,
+        args.model_name,
+        args.nb_settings,
+        args.nb_trajectories,
+        args.timestep,
+        args.endtime,
         dataset_explorer.dataset_folder,
         how='concat'
     )
-
-    with open(dataset_explorer.dataset_fp, 'wb') as f:
-        np.save(f, dataset)
+    np.save(dataset_explorer.dataset_fp, dataset)
 
     print(">>> DONE.")
 
     end = time()
     execution_time = end - start
-    msg = f"Simulating {nb_trajectories} {model_name} " \
-          f"trajectories for {nb_settings} different settings " \
-          f"with endtime {endtime} took {execution_time} seconds.\n"\
+    msg = f"Simulating {args.nb_trajectories} {args.model_name} " \
+          f"trajectories for {args.nb_settings} different settings " \
+          f"with endtime {args.endtime} took {execution_time} seconds.\n"\
 
     with open(dataset_explorer.log_fp, 'a') as f:
         f.write(msg)
@@ -217,5 +212,17 @@ if __name__ == '__main__':
     print(msg)
 
 
-# python stochnet_v2/dataset/dataset_simulation.py 1000 10 50 0.2 20 '/home/dn/Documents/tmp/tmp_simulations' 'EGFR'
-# python stochnet_v2/dataset/dataset_simulation.py 1 40 40 400 10000 '/home/dn/DATA/Gene' 'Gene'
+if __name__ == '__main__':
+    main()
+
+"""
+python stochnet_v2/dataset/dataset_simulation.py \
+       --project_folder='/home/dn/DATA/Gene' \
+       --timestep=400 \
+       --dataset_id=3 \
+       --nb_settings=2 \
+       --nb_trajectories=5 \
+       --endtime=10000 \
+       --model_name='Gene' \
+       --random_seed=43
+"""
