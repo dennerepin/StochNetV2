@@ -56,7 +56,8 @@ def main():
 
     settings = get_histogram_settings(
         args.nb_settings,
-        dataset_explorer.train_fp
+        # dataset_explorer.train_fp,
+        dataset_explorer.test_fp,
     )
     np.save(dataset_explorer.histogram_settings_fp, settings)
 
@@ -92,10 +93,10 @@ if __name__ == '__main__':
 python stochnet_v2/dataset/histogram_dataset_simulation.py \
        --project_folder='/home/dn/DATA/Gene' \
        --timestep=400 \
-       --dataset_id=3 \
-       --nb_settings=2 \
-       --nb_trajectories=5 \
+       --dataset_id=2 \
+       --nb_settings=25 \
+       --nb_trajectories=2000 \
        --endtime=10000 \
        --model_name='Gene' \
-       --random_seed=43
+       --random_seed=44
 """

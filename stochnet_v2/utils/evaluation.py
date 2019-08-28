@@ -384,7 +384,7 @@ def evaluate(
                     )
                     maybe_create_dir(os.path.dirname(save_path))
 
-                    fig = plt.figure(figsize=(10, 6))
+                    fig = plt.figure(figsize=(12, 7))
                     plt.title(
                         f"{target_species_names[species_idx]}: "
                         f"{distance_kind}: {curr_setting_distance}, "

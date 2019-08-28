@@ -14,7 +14,7 @@ initializer = tf.compat.v1.initializers.variance_scaling(mode='fan_out', distrib
 # initializer = None
 
 BODY_FN_REGISTRY = Registry(name="BodyFunctionsRegistry")
-RESIDUAL_BLOCKS_REGISTRY = Registry(name="ResidualBlocksRegistry")
+BLOCKS_REGISTRY = Registry(name="ResidualBlocksRegistry")
 
 
 # def dummy_body(input_tensor):
@@ -25,8 +25,8 @@ RESIDUAL_BLOCKS_REGISTRY = Registry(name="ResidualBlocksRegistry")
 #     return x
 
 
-# @RESIDUAL_BLOCKS_REGISTRY.register("a")
-# def _residual_block_a(
+# @BLOCKS_REGISTRY.register("a")
+# def _block_a(
 #         x,
 #         hidden_size,
 #         activation,
@@ -42,8 +42,8 @@ RESIDUAL_BLOCKS_REGISTRY = Registry(name="ResidualBlocksRegistry")
 #     return h2
 
 
-@RESIDUAL_BLOCKS_REGISTRY.register("a")
-def residual_block_a(
+@BLOCKS_REGISTRY.register("a")
+def block_a(
         x,
         hidden_size,
         activation,
@@ -64,8 +64,8 @@ def residual_block_a(
     return h2
 
 
-@RESIDUAL_BLOCKS_REGISTRY.register("b")
-def residual_block_b(
+@BLOCKS_REGISTRY.register("b")
+def block_b(
         x,
         hidden_size,
         activation,
@@ -89,8 +89,8 @@ def residual_block_b(
 
 
 # FOR body_b
-@RESIDUAL_BLOCKS_REGISTRY.register("c")
-def residual_block_c(
+@BLOCKS_REGISTRY.register("c")
+def block_c(
         x,
         hidden_size,
         activation,
@@ -110,14 +110,14 @@ def residual_block_c(
 def body_a(
         x,
         hidden_size,
-        n_residual_blocks,
-        residual_block_fn,
+        n_blocks,
+        block_fn,
         use_batch_norm,
         activation_fn,
         params_dict,
 ):
-    for _ in range(n_residual_blocks):
-        x = residual_block_fn(
+    for _ in range(n_blocks):
+        x = block_fn(
             x,
             hidden_size,
             activation_fn,
@@ -132,8 +132,8 @@ def body_a(
 def body_b(
         x,
         hidden_size,
-        n_residual_blocks,
-        residual_block_fn,
+        n_blocks,
+        block_fn,
         use_batch_norm,
         activation_fn,
         params_dict,
@@ -143,8 +143,8 @@ def body_b(
     if use_batch_norm:
         x = BatchNorm()(x)
 
-    for _ in range(n_residual_blocks):
-        x = residual_block_fn(
+    for _ in range(n_blocks):
+        x = block_fn(
             x,
             hidden_size,
             activation_fn,
@@ -155,12 +155,55 @@ def body_b(
     return x
 
 
+@BLOCKS_REGISTRY.register('lstm')
+def lstm(hidden_size):
+    return tf.compat.v1.nn.rnn_cell.LSTMCell(hidden_size)
+
+
+@BLOCKS_REGISTRY.register('gru')
+def gru(hidden_size):
+    return tf.compat.v1.nn.rnn_cell.GRUCell(hidden_size)
+
+
+@BODY_FN_REGISTRY.register("body_lstm")
+def body_lstm(
+        x,
+        hidden_size,
+        n_blocks,
+        block_fn,
+        use_batch_norm,
+        activation_fn,
+        params_dict,
+):
+    if n_blocks == 1:
+        # output = tf.keras.layers.LSTM(hidden_size)(x)
+        # cell = tf.keras.layers.LSTMCell(hidden_size)
+
+        # cell = tf.compat.v1.nn.rnn_cell.LSTMCell(hidden_size)
+        # cell = tf.compat.v1.nn.rnn_cell.GRUCell(hidden_size)
+        cell = block_fn(hidden_size)
+    else:
+        cells = [
+            # tf.compat.v1.nn.rnn_cell.LSTMCell(hidden_size)
+            # tf.compat.v1.nn.rnn_cell.GRUCell(hidden_size)
+            block_fn(hidden_size)
+            for _ in range(n_blocks)
+        ]
+        # cell = tf.keras.layers.StackedRNNCells(cells)
+        cell = tf.compat.v1.nn.rnn_cell.MultiRNNCell(cells)
+
+    # output = tf.keras.layers.RNN(cell)(x)  # Produces error with convert_variables_to_constants (bad name-scopes)
+    output, state = tf.compat.v1.nn.dynamic_rnn(cell, x, dtype=tf.float32)
+    output = output[:, -1, :]
+    return output
+
+
 def body_main(
         x,
         hidden_size,
-        n_residual_blocks,
+        n_blocks,
         body_fn_name="body_a",
-        residual_block_name="a",
+        block_name="a",
         use_batch_norm=False,
         activation="none",
         activity_regularizer="none",
@@ -172,7 +215,7 @@ def body_main(
     print(
         f"\n"
         f" ** Building '{body_fn_name}' body, hidden size: {hidden_size} \n"
-        f"    with {n_residual_blocks} of '{residual_block_name}' residual block \n"
+        f"    with {n_blocks} of '{block_name}' block \n"
         f"    activation: {activation} \n"
         f"    activity_regularizer: {activity_regularizer} \n"
         f"    kernel_constraint: {kernel_constraint} \n"
@@ -192,20 +235,23 @@ def body_main(
         'kernel_initializer': initializer,  # TODO
     }
     body_fn = BODY_FN_REGISTRY[body_fn_name]
-    residual_block_fn = RESIDUAL_BLOCKS_REGISTRY[residual_block_name]
+    block_fn = BLOCKS_REGISTRY[block_name]
     activation_fn = ACTIVATIONS_REGISTRY[activation]
 
-    shape = x.shape.as_list()
-    x = tf.reshape(x, shape=(shape[0] or -1, np.prod(shape[1:]),))
+    if not 'lstm' in body_fn_name:
+        shape = x.shape.as_list()
+        x = tf.reshape(x, shape=(shape[0] or -1, np.prod(shape[1:]),))
 
     x = body_fn(
         x,
         hidden_size,
-        n_residual_blocks,
-        residual_block_fn=residual_block_fn,
+        n_blocks,
+        block_fn=block_fn,
         use_batch_norm=use_batch_norm,
         activation_fn=activation_fn,
         params_dict=params_dict,
     )
 
     return x
+
+
