@@ -386,38 +386,41 @@ class StochNet:
             add_timestamps=False,
     ):
         n_settings, *state_shape = curr_state_values.shape
-        traces = np.zeros((n_steps + 1, n_traces, n_settings, *state_shape))
+        traces = np.zeros((n_steps + 1, n_traces, n_settings, *state_shape), dtype=np.float32)
         zero_level = self.rescale(np.zeros_like(curr_state_values))
 
         if not curr_state_rescaled:
             curr_state_values = self.rescale(curr_state_values)
 
         traces[0] = curr_state_values
-        
+
         # first step: branch simulations for n_traces
-        next_state_values = self.next_state(
-                curr_state_values,
-                curr_state_rescaled=True,
-                scale_back_result=False,
-                round_result=False,
-                n_samples=n_traces,
-            )
+        try:
+            next_state_values = self.next_state(
+                    curr_state_values,
+                    curr_state_rescaled=True,
+                    scale_back_result=False,
+                    round_result=False,
+                    n_samples=n_traces,
+                )
+        except tf.errors.InvalidArgumentError:
+            next_state_values = np.zeros((n_traces, *curr_state_values.shape), dtype=np.float32)
+            print('too many settings to sample first step, iterating through settings')
+
+            for i in range(n_settings):
+                next_state_values_i = self.next_state(
+                    curr_state_values[i:i+1],
+                    curr_state_rescaled=True,
+                    scale_back_result=False,
+                    round_result=False,
+                    n_samples=n_traces,
+                )
+                next_state_values[:, i:i+1, ...] = next_state_values_i
+
         next_state_values = np.fmax(next_state_values, zero_level)
         traces[1] = next_state_values
 
-        # for step in tqdm(range(2, n_steps + 1)):
-        #     next_state_values = next_state_values.reshape((-1, *state_shape))
-        #     next_state_values = self.next_state(
-        #         next_state_values,
-        #         curr_state_rescaled=True,
-        #         scale_back_result=False,
-        #         round_result=False,
-        #         n_samples=1,
-        #     )
-        #     next_state_values = next_state_values.reshape((-1, n_settings, *state_shape))
-        #     # next_state_values = np.maximum(0, next_state_values)
-        #     traces[step] = next_state_values
-
+        # further steps continue branches created on the first step
         iterate_through_traces = n_traces <= n_settings
         print(f'iterate through {"traces" if iterate_through_traces else "settings"}')
 
