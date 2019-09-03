@@ -88,14 +88,10 @@ def _single_trace(
         gillespy_model,
         traj_per_setting,
 ):
-    sub_traces = []
     gillespy_model.set_species_initial_value(setting)
-    traces = gillespy_model.run(number_of_trajectories=traj_per_setting)
-    for trace in traces:
-        trace = np.stack([trace[s] for s in ['time'] + gillespy_model.species], axis=-1)
-        sub_traces.append(trace)
-    sub_traces = np.stack(sub_traces)
-    return sub_traces
+    traces = gillespy_model.run(number_of_trajectories=traj_per_setting, show_labels=False)
+    traces = np.array(traces)
+    return traces
 
 
 def generate_gillespy_traces(settings, step_to, timestep, gillespy_model, traj_per_setting=10):
@@ -116,4 +112,3 @@ def generate_gillespy_traces(settings, step_to, timestep, gillespy_model, traj_p
 
     simulated_traces = pool.map(task, settings)
     return np.stack(simulated_traces)
-

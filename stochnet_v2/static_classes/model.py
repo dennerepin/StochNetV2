@@ -384,78 +384,46 @@ class StochNet:
             scale_back_result=True,
             round_result=False,
             add_timestamps=False,
+            batch_size=150,
     ):
         n_settings, *state_shape = curr_state_values.shape
-        traces = np.zeros((n_steps + 1, n_traces, n_settings, *state_shape), dtype=np.float32)
-        zero_level = self.rescale(np.zeros_like(curr_state_values))
+
+        traces_final_shape = (n_steps + 1, n_traces, n_settings, *state_shape)
+        traces_tmp_shape = (n_steps + 1, n_settings * n_traces, *state_shape)
+
+        traces = np.zeros(traces_tmp_shape, dtype=np.float32)
 
         if not curr_state_rescaled:
             curr_state_values = self.rescale(curr_state_values)
 
+        curr_state_values = np.tile(curr_state_values, [n_traces, 1, 1])  # (n_settings * n_traces, *state_shape)
         traces[0] = curr_state_values
 
-        # first step: branch simulations for n_traces
-        try:
-            next_state_values = self.next_state(
-                    curr_state_values,
+        zero_level = self.rescale(np.zeros(traces[0].shape))
+
+        n_batches = n_settings * n_traces // batch_size
+        remainder = n_settings * n_traces % batch_size != 0
+
+        for step_num in tqdm(range(n_steps)):
+            for n in range(n_batches):
+                traces[step_num + 1, n * batch_size: (n + 1) * batch_size] = self.next_state(
+                    traces[step_num, n * batch_size: (n + 1) * batch_size],
                     curr_state_rescaled=True,
                     scale_back_result=False,
                     round_result=False,
-                    n_samples=n_traces,
+                    n_samples=1,
                 )
-        except tf.errors.InvalidArgumentError:
-            next_state_values = np.zeros((n_traces, *curr_state_values.shape), dtype=np.float32)
-            print('too many settings to sample first step, iterating through settings')
-
-            for i in range(n_settings):
-                next_state_values_i = self.next_state(
-                    curr_state_values[i:i+1],
+            if remainder:
+                traces[step_num + 1, n_settings * n_traces:] = self.next_state(
+                    traces[step_num, n_settings * n_traces:],
                     curr_state_rescaled=True,
                     scale_back_result=False,
                     round_result=False,
-                    n_samples=n_traces,
+                    n_samples=1,
                 )
-                next_state_values[:, i:i+1, ...] = next_state_values_i
+            traces[step_num] = np.maximum(zero_level, traces[step_num])
 
-        next_state_values = np.fmax(next_state_values, zero_level)
-        traces[1] = next_state_values
-
-        # further steps continue branches created on the first step
-        iterate_through_traces = n_traces <= n_settings
-        print(f'iterate through {"traces" if iterate_through_traces else "settings"}')
-
-        if iterate_through_traces:
-            zero_level = self.rescale(np.zeros_like(next_state_values[0]))
-            for trace_idx in tqdm(range(n_traces)):
-                state_values = next_state_values[trace_idx]
-                for step in range(2, n_steps + 1):
-                    state_values = self.next_state(
-                        state_values,
-                        curr_state_rescaled=True,
-                        scale_back_result=False,
-                        round_result=False,
-                        n_samples=1,
-                    )
-                    state_values = np.squeeze(state_values, 0)
-                    state_values = np.fmax(state_values, zero_level)
-                    traces[step, trace_idx] = state_values
-        else:
-            zero_level = self.rescale(np.zeros_like(next_state_values[:, 0]))
-            for setting_idx in tqdm(range(n_settings)):
-                state_values = next_state_values[:, setting_idx]
-                for step in range(2, n_steps + 1):
-                    state_values = self.next_state(
-                        state_values,
-                        curr_state_rescaled=True,
-                        scale_back_result=False,
-                        round_result=False,
-                        n_samples=1,
-                    )
-                    state_values = np.squeeze(state_values, 0)
-                    state_values = np.fmax(state_values, zero_level)
-                    traces[step, :, setting_idx] = state_values
-
-        # [n_steps, n_settings, n_settings, 1, nb_features] -> [n_steps, n_traces, n_settings, nb_features]
+        traces = np.reshape(traces, traces_final_shape)
         traces = np.squeeze(traces, axis=-2)
 
         if scale_back_result:
@@ -473,3 +441,4 @@ class StochNet:
             traces = np.concatenate([timespan, traces], axis=-1)
 
         return traces
+
