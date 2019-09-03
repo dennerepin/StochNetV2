@@ -2,12 +2,14 @@ import numpy as np
 import tensorflow as tf
 
 from stochnet_v2.dynamic_classes.op_registry import OP_REGISTRY
+from stochnet_v2.dynamic_classes.op_registry import dense
+
 
 PRIMITIVES = [
     'dense',
-    'relu',
     'skip_connect',
     'none',
+    'relu',
 ]
 
 null_scope = tf.compat.v1.VariableScope("")
@@ -17,17 +19,7 @@ def l2_regularizer(x):
     return 0.01 * tf.compat.v1.nn.l2_loss(x)
 
 
-def expand_dense(x):
-    out_dim = x.shape.as_list()[-1] * 4
-    return tf.compat.v1.layers.Dense(out_dim)(x)
-
-
-def regular_dense(x):
-    out_dim = x.shape.as_list()[-1]
-    return tf.compat.v1.layers.Dense(out_dim)(x)
-
-
-def mixed_op(x, index, expand):
+def mixed_op(x, index, expand, expansion_coeff):
 
     with tf.compat.v1.variable_scope(null_scope):
         alphas = tf.compat.v1.get_variable(
@@ -45,7 +37,7 @@ def mixed_op(x, index, expand):
     outputs = []
     for idx, primitive in enumerate(PRIMITIVES):
 
-        out = OP_REGISTRY[primitive](x)
+        out = OP_REGISTRY[primitive](x, expansion_coeff)
         mask = [idx == i for i in range(len(PRIMITIVES))]
         mask = tf.compat.v1.constant(mask, tf.bool)
         alpha = tf.compat.v1.boolean_mask(alphas, mask)
@@ -59,16 +51,22 @@ def cell(
         s0,
         s1,
         cell_size,
-        multiplier,
         expand,
         expand_prev,
+        expansion_multiplier,
 ):
+    print(
+        f"{'expand' if expand else 'normal'} cell, "
+        f"{'expand' if expand_prev else 'normal'}_prev cell"
+    )
+    print(f"Inputs: s0: {s0.shape}, s1: {s1.shape}")
     if expand_prev:
-        s0 = expand_dense(s0)
+        s0 = dense(s0, expansion_multiplier)
     else:
-        s0 = regular_dense(s0)
+        s0 = dense(s0, 1)
 
-    s1 = regular_dense(s1)
+    s1 = dense(s1, 1)
+    print(f"State: s0: {s0.shape}, s1: {s1.shape}")
 
     state = [s0, s1]
     offset = 0
@@ -76,17 +74,22 @@ def cell(
     for i in range(cell_size):
         tmp = []
         for j in range(i + 2):
-            tmp.append(mixed_op(state[j], offset + j, expand))
+            expansion_coeff = expansion_multiplier if expand and j < 2 else 1
+            mix = mixed_op(state[j], offset + j, expand, expansion_coeff)
+            print(i, j, mix.shape)
+            tmp.append(mix)
 
         offset += len(state)
         state.append(tf.add_n(tmp))
 
-    out = tf.concat(state[-multiplier:], axis=-1)
+    print([t.shape.as_list() for t in state])
+
+    out = tf.concat(state[-1:], axis=-1)
 
     return out
 
 
-def body(x, n_cells=4, cell_size=4, multiplier=4):
+def body(x, n_cells=4, cell_size=4, expansion_multiplier=4):
     out_dim = x.shape.as_list()[-1]
     s0 = tf.compat.v1.layers.Dense(out_dim, activation='relu')(x)
     s1 = tf.compat.v1.layers.Dense(out_dim, activation='relu')(x)
@@ -98,4 +101,7 @@ def body(x, n_cells=4, cell_size=4, multiplier=4):
         else:
             expand = False
 
-        s0, s1 = s1, cell()
+        s0, s1 = s1, cell(s0, s1, cell_size, expand, expand_prev, expansion_multiplier)
+        expand_prev = expand
+
+    return s1

@@ -13,7 +13,7 @@ from stochnet_v2.utils.errors import DimensionError
 from stochnet_v2.utils.registry import Registry
 
 tfd = tfp.distributions
-Dense = tf.layers.Dense
+Dense = tf.compat.v1.layers.Dense
 # initializer = tf.initializers.glorot_normal
 # initializer = tf.compat.v1.initializers.variance_scaling(mode='fan_out', distribution="truncated_normal")
 initializer = None
