@@ -28,7 +28,9 @@ def rich_dense(x, expansion_coeff):
 @OP_REGISTRY.register('none')
 def none(x, expansion_coeff):
     n_dims = x.shape.ndims
-    return tf.tile(tf.compat.v1.zeros_like(x), [1 for _ in range(n_dims - 1)] + [expansion_coeff])
+    with tf.compat.v1.variable_scope("none"):
+        x = tf.tile(tf.compat.v1.zeros_like(x), [1 for _ in range(n_dims - 1)] + [expansion_coeff])
+    return x
 
 
 @OP_REGISTRY.register('skip_connect')

@@ -8,7 +8,7 @@ from stochnet_v2.utils.registry import REGULARIZERS_REGISTRY
 
 
 BatchNorm = tf.compat.v1.layers.BatchNormalization
-Dense = tf.layers.Dense
+Dense = tf.compat.v1.layers.Dense
 # initializer = tf.initializers.glorot_normal
 initializer = tf.compat.v1.initializers.variance_scaling(mode='fan_out', distribution="truncated_normal")
 # initializer = None
