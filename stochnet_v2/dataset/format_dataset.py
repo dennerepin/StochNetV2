@@ -68,10 +68,10 @@ if __name__ == '__main__':
 python stochnet_v2/dataset/format_dataset.py \
        --project_folder='/home/dn/DATA/Gene' \
        --timestep=400 \
-       --dataset_id=3 \
+       --dataset_id=2 \
        --nb_past_timesteps=1 \
        --positivity=true \
-       --test_fraction=0.125 \
+       --test_fraction=0.2 \
        --save_format='hdf5' \
-       --random_seed=23
+       --random_seed=25
 """

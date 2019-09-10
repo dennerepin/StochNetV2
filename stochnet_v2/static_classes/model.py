@@ -62,8 +62,8 @@ def _get_mixture(config, sample_space_dimension):
     return MixtureOutputLayer(categorical, components)
 
 
-def get_body_fn(config):
-    return partial(nn_bodies.body_main, **config)
+# def get_body_fn(config):
+#     return partial(nn_bodies.body_main, **config)
 
 
 class StochNet:
@@ -108,27 +108,12 @@ class StochNet:
             self.session = tf.compat.v1.Session()
 
             if mode == 'normal':
-                if body_config_path is None:
-                    raise ValueError("Should provide `body_config_path` to build model")
-                body_config = self._read_config(body_config_path, True)
-
-                if mixture_config_path is None:
-                    raise ValueError("Should provide `mixture_config_path` to build model")
-                mixture_config = self._read_config(mixture_config_path, True)
-
-                body_fn = get_body_fn(body_config)
-                self._build_main_graph(body_fn, mixture_config)
-                self._build_sampling_graph()
-                self._save_graph_keys()
-                if ckpt_path:
-                    self.restore_from_checkpoint(ckpt_path)
+                self._init_normal(body_config_path, mixture_config_path, ckpt_path)
 
             elif mode == 'inference':
                 self._load_model_from_frozen_graph()
 
             elif mode == 'inference_ckpt':
-                if ckpt_path is None:
-                    raise ValueError("Should provide `ckpt_path` to build model")
                 self._load_model_from_checkpoint(ckpt_path)
 
             else:
@@ -140,20 +125,43 @@ class StochNet:
 
         self.scaler = self.load_scaler()
 
-    def _read_config(self, file_path, save_to_model_dir=False):
+    def _init_normal(
+            self,
+            body_config_path,
+            mixture_config_path,
+            ckpt_path,
+    ):
+        if body_config_path is None:
+            raise ValueError("Should provide `body_config_path` to build model")
+        body_config = self._read_config(body_config_path, 'body_config.json')
+
+        if mixture_config_path is None:
+            raise ValueError("Should provide `mixture_config_path` to build model")
+        mixture_config = self._read_config(mixture_config_path, 'mixture_config.json')
+
+        body_fn = self._get_body_fn(body_config)
+        self._build_main_graph(body_fn, mixture_config)
+        self._build_sampling_graph()
+        self._save_graph_keys()
+        if ckpt_path:
+            self.restore_from_checkpoint(ckpt_path)
+
+    def _read_config(self, file_path, model_dir_save_name=None):
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"Config file not found: {file_path}")
 
         with open(file_path, 'r') as f:
             config = json.load(f)
 
-        if save_to_model_dir is True:
-            file_name = os.path.basename(file_path)
-            save_path = os.path.join(self.model_explorer.model_folder, file_name)
+        if model_dir_save_name:
+            save_path = os.path.join(self.model_explorer.model_folder, model_dir_save_name)
             with open(save_path, 'w') as f:
                 json.dump(config, f, indent='\t')
 
         return config
+
+    def _get_body_fn(self, body_config):
+        return partial(nn_bodies.body_main, **body_config)
 
     def _build_main_graph(self, body_fn, mixture_config_path):
         self.input_placeholder = tf.compat.v1.placeholder(
@@ -236,6 +244,8 @@ class StochNet:
         self.restored = True
 
     def _load_model_from_checkpoint(self, ckpt_path):
+        if ckpt_path is None:
+            raise ValueError("Should provide `ckpt_path` to build model")
         meta_ckpt_path = ckpt_path + '.meta'
         if not os.path.exists(meta_ckpt_path):
             raise FileNotFoundError(
@@ -421,7 +431,7 @@ class StochNet:
                     round_result=False,
                     n_samples=1,
                 )
-            traces[step_num] = np.maximum(zero_level, traces[step_num])
+            traces[step_num + 1] = np.maximum(zero_level, traces[step_num + 1])
 
         traces = np.reshape(traces, traces_final_shape)
         traces = np.squeeze(traces, axis=-2)
