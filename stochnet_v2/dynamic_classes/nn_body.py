@@ -37,8 +37,9 @@ def cell(
 
         for i in range(cell_size):
             tmp = []
+            output_state_idx = i + 2
+
             for j in range(2):
-                output_state_idx = i + 2
                 genotype_idx = 2 * i + j
                 input_state_idx = indices[genotype_idx]
                 expansion_coeff = expansion_multiplier if expand and input_state_idx < 2 else 1

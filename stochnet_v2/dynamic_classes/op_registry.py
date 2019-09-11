@@ -16,12 +16,12 @@ def simple_dense(x, expansion_coeff):
 
 
 @OP_REGISTRY.register('rich_dense_1')
-def rich_dense(x, expansion_coeff):
+def rich_dense_1(x, expansion_coeff):
     return relu_dense_bn(x, expansion_coeff)
 
 
 @OP_REGISTRY.register('rich_dense_2')
-def rich_dense(x, expansion_coeff):
+def rich_dense_2(x, expansion_coeff):
     return bn_dense_relu(x, expansion_coeff)
 
 

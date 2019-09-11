@@ -157,7 +157,7 @@ class Trainer:
             model.recreate_from_genome(best_loss_checkpoint_path)
             model.save()
 
-            return best_loss_checkpoint_path
+        return best_loss_checkpoint_path
 
     def _build_trainable_graph(
             self,
@@ -170,6 +170,11 @@ class Trainer:
         model_input = get_transformed_tensor(model.input_placeholder, trainable_graph)
         rv_output = get_transformed_tensor(model.rv_output_ph, trainable_graph)
         model_loss = get_transformed_tensor(model.loss, trainable_graph)
+
+        # trainable_graph = model.graph
+        # model_input = model.input_placeholder
+        # rv_output = model.rv_output_ph
+        # model_loss = model.loss
 
         with trainable_graph.as_default():
 
@@ -186,7 +191,6 @@ class Trainer:
             #     print(var)
 
             # MAIN:
-            # global_step = tf.train.get_or_create_global_step()
             global_step_main = tf.Variable(0, trainable=False, name='global_step_main')
 
             reg_losses_main = tf.compat.v1.get_collection('regularization_losses')
@@ -441,8 +445,7 @@ class Trainer:
                 optimizer_vars = train_operations_arch.optimizer_variables
             else:
                 raise ValueError(f"`which_optimizer` option not recognized")
-            # init_optimizer_vars = tf.compat.v1.variables_initializer(optimizer_vars)
-            # session.run(init_optimizer_vars)
+            # session.run(tf.compat.v1.variables_initializer(optimizer_vars))
             session.run([var.initializer for var in optimizer_vars])
 
         def _get_regular_checkpoint_path(step):
@@ -536,7 +539,6 @@ class Trainer:
 
             if checkpoint_step == 0:
                 LOGGER.info(f'checkpoint_step is 0, reinitialize all variables...')
-                # session.run(tf.compat.v1.variables_initializer(global_vars + arch_vars))
                 session.run([
                     var.initializer
                     for var in train_operations_main.train_variables
@@ -725,9 +727,12 @@ class Trainer:
                         f'\t - {epoch_steps} steps took {epoch_time:.1f} seconds, avg_step_time={avg_step_time:.3f}\n'
                     )
 
-                variables = session.run(train_operations_arch.train_variables)
+                # variables = session.run(train_operations_arch.train_variables)
+                # for v in variables:
+                #     print(v)
+                variables = train_operations_arch.train_variables
                 for v in variables:
-                    print(v)
+                    print(v.name, session.run(v))
 
         best_checkpoint_path = _get_best_checkpoint_path(best_loss_step_main)
 

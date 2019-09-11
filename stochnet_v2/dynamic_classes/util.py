@@ -32,6 +32,10 @@ def l1_regularizer(x, scale=0.01):
     return scale * tf.reduce_sum(tf.abs(x))
 
 
+def softmax_sparsity_regularizer(x, scale=0.01):
+    return scale * (1 - tf.compat.v1.nn.l2_loss(x))
+
+
 def expand_identity(x, expansion_coeff):
     with tf.compat.v1.variable_scope('expansion_identity'):
         n_dims = x.shape.ndims

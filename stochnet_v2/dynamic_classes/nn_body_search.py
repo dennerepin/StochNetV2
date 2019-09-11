@@ -1,16 +1,20 @@
 import numpy as np
 import tensorflow as tf
+import tensorflow_probability as tfp
 
 from stochnet_v2.dynamic_classes.op_registry import OP_REGISTRY
 from stochnet_v2.dynamic_classes.op_registry import simple_dense as dense
-# from stochnet_v2.dynamic_classes.op_registry import rich_dense as dense  # TODO: ?
+# from stochnet_v2.dynamic_classes.op_registry import rich_dense_1 as dense  # TODO: ?
+# from stochnet_v2.dynamic_classes.op_registry import rich_dense_2 as dense  # TODO: ?
 from stochnet_v2.dynamic_classes.genotypes import Genotype
 from stochnet_v2.dynamic_classes.genotypes import PRIMITIVES
 from stochnet_v2.dynamic_classes.util import expand_cell
 from stochnet_v2.dynamic_classes.util import l1_regularizer
 from stochnet_v2.dynamic_classes.util import l2_regularizer
+from stochnet_v2.dynamic_classes.util import softmax_sparsity_regularizer
 
-# null_scope = tf.compat.v1.VariableScope("")
+
+tfd = tfp.distributions
 
 
 def mixed_op(x, expansion_coeff):
@@ -22,10 +26,14 @@ def mixed_op(x, expansion_coeff):
             initializer=tf.compat.v1.ones_initializer,
             trainable=True,
         )
-        alphas_reg_loss = l1_regularizer(alphas, 0.005)
-        tf.compat.v1.add_to_collection('architecture_regularization_losses', alphas_reg_loss)
+        regularizer_scale = 0.001
+        alphas_reg_loss_1 = l1_regularizer(alphas, regularizer_scale)
 
-    alphas = tf.nn.softmax(alphas)
+        alphas = tf.nn.softmax(alphas)
+        alphas_reg_loss_2 = softmax_sparsity_regularizer(alphas, 2 * regularizer_scale * len(PRIMITIVES) ** 2)
+
+        alphas_reg_loss = alphas_reg_loss_1 + alphas_reg_loss_2
+        tf.compat.v1.add_to_collection('architecture_regularization_losses', alphas_reg_loss)
 
     outputs = []
     for idx, primitive in enumerate(PRIMITIVES):
@@ -34,6 +42,52 @@ def mixed_op(x, expansion_coeff):
         outputs.append(alpha * out)
 
     out = tf.compat.v1.add_n(outputs)
+
+    return out
+
+
+@tf.custom_gradient
+def cat_onehot(a):
+    categorical = tfd.Categorical(probs=a)
+    cat = categorical.sample()
+    one_hot = tf.one_hot(cat, depth=a.shape.as_list()[0])
+
+    def grad(dy):
+        return dy * one_hot * a
+
+    return one_hot, grad
+
+
+def mixed_op_cat(x, expansion_coeff):
+
+    with tf.compat.v1.variable_scope("architecture_variables"):
+        alphas = tf.compat.v1.get_variable(
+            name=f"alphas",
+            shape=[len(PRIMITIVES)],
+            initializer=tf.compat.v1.ones_initializer,
+            trainable=True,
+        )
+
+        regularizer_scale = 0.001
+        alphas_reg_loss_1 = l1_regularizer(alphas, regularizer_scale)
+
+        alphas = tf.nn.softmax(alphas)
+        alphas_reg_loss_2 = softmax_sparsity_regularizer(alphas, 2 * regularizer_scale * len(PRIMITIVES) ** 2)
+
+        alphas_reg_loss = alphas_reg_loss_1 + alphas_reg_loss_2
+        tf.compat.v1.add_to_collection('architecture_regularization_losses', alphas_reg_loss)
+
+    outputs = []
+    for idx, primitive in enumerate(PRIMITIVES):
+        tmp = OP_REGISTRY[primitive](x, expansion_coeff)
+        outputs.append(tmp)
+
+    out = tf.compat.v1.stack(outputs, axis=0)
+
+    one_hot = cat_onehot(alphas)
+    one_hot = tf.expand_dims(tf.expand_dims(one_hot, -1), -1)
+    out = one_hot * out
+    out = tf.reduce_sum(out, axis=0)
 
     return out
 
@@ -120,11 +174,12 @@ def get_genotypes(session, n_cells, cell_size):
                 alpha = alpha[0]
 
                 alpha_value = session.run(alpha)
-                value_sorted = alpha_value.argsort()
-                max_index = \
-                    value_sorted[-2] \
-                    if value_sorted[-1] == PRIMITIVES.index('none') \
-                    else value_sorted[-1]
+                value_argsort = alpha_value.argsort()
+                # max_index = \
+                #     value_sorted[-2] \
+                #     if value_sorted[-1] == PRIMITIVES.index('none') \
+                #     else value_sorted[-1]
+                max_index = value_argsort[-1]
 
                 edges.append((PRIMITIVES[max_index], j))
                 edges_alphas.append(alpha_value[max_index])
@@ -148,3 +203,4 @@ def get_genotypes(session, n_cells, cell_size):
         genotypes.append(genotype)
 
     return genotypes
+
