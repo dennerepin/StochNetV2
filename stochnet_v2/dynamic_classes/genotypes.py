@@ -9,5 +9,5 @@ PRIMITIVES = [
     'element_wise',
     'skip_connect',
     'none',
-    # 'relu',
+    'relu',
 ]

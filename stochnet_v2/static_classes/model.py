@@ -62,10 +62,6 @@ def _get_mixture(config, sample_space_dimension):
     return MixtureOutputLayer(categorical, components)
 
 
-# def get_body_fn(config):
-#     return partial(nn_bodies.body_main, **config)
-
-
 class StochNet:
 
     def __init__(
@@ -210,10 +206,7 @@ class StochNet:
         frozen_graph_def = tf.compat.v1.graph_util.convert_variables_to_constants(
             sess=self.session,
             input_graph_def=self.graph.as_graph_def(),
-            output_node_names=[
-                t.split(':')[0]
-                for t in [self._sample_tensor_name, self._pred_tensor_name]
-            ],
+            output_node_names=self.dest_nodes,
         )
         return frozen_graph_def
 
@@ -315,6 +308,10 @@ class StochNet:
     def sample_tensor(self, tensor):
         self._sample_tensor = tensor
         self._sample_tensor_name = tensor.name
+
+    @property
+    def dest_nodes(self):
+        return [t.split(':')[0] for t in [self._sample_tensor_name, self._pred_tensor_name]]
 
     def load_scaler(self):
         with open(self.dataset_explorer.scaler_fp, 'rb') as file:

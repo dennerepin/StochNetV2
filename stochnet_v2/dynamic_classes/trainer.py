@@ -48,6 +48,18 @@ ToleranceDropLearningStrategy = namedtuple(
     ],
 )
 
+Summaries = namedtuple(
+    'Summaries',
+    [
+        'summary_writer',
+        'loss_summary',
+        'learning_rate_summary',
+        'test_mean_loss_ph',
+        'test_loss_summary',
+    ]
+)
+
+
 _MINIMAL_LEARNING_RATE = 1 * 10 ** - 7
 _NUMBER_OF_REGULAR_CHECKPOINTS = 10
 _NUMBER_OF_BEST_LOSS_CHECKPOINTS = 5
@@ -84,17 +96,20 @@ class Trainer:
     def train(
             self,
             model,
-            save_dir=None,
-            learning_strategy_main=None,
-            learning_strategy_arch=None,
-            batch_size=None,
             n_epochs_main=None,
             n_epochs_arch=None,
             n_epochs_interval=None,
+            n_epochs_finetune=None,
+            batch_size=None,
+            learning_strategy_main=None,
+            learning_strategy_arch=None,
+            learning_strategy_finetune=None,
+            save_dir=None,
             ckpt_path=None,
             dataset_kind='tfrecord',
             add_noise=False,
             stddev=0.01,
+            mode='search_finetune'
     ):
         save_dir = save_dir or model.model_explorer.model_folder
 
@@ -116,50 +131,296 @@ class Trainer:
         if learning_strategy_arch is None:
             learning_strategy_arch = _DEFAULT_LEARNING_STRATEGY
 
-        trainable_graph, train_operations_main, train_operations_arch, train_input_x, train_input_y = \
-            self._build_trainable_graph(model, learning_strategy_main, learning_strategy_arch)
+        if learning_strategy_finetune is None:
+            learning_strategy_finetune = _DEFAULT_LEARNING_STRATEGY
 
-        with tf.compat.v1.Session(graph=trainable_graph) as session:
+        if 'search' in mode:
+            trainable_graph, train_operations_main, train_operations_arch, train_input_x, train_input_y = \
+                self._build_trainable_graph_search(model, learning_strategy_main, learning_strategy_arch)
 
-            if ckpt_path is None:
-                session.run(tf.compat.v1.global_variables_initializer())
-            else:
-                tf.compat.v1.train.Saver().restore(session, ckpt_path)
-
-            clear_train_dir = ckpt_path is None
-            tensorboard_log_dir = os.path.join(save_dir, 'tensorboard')
-            checkpoints_save_dir = os.path.join(save_dir, 'checkpoints')
-            maybe_create_dir(tensorboard_log_dir, erase_existing=clear_train_dir)
-            maybe_create_dir(checkpoints_save_dir, erase_existing=clear_train_dir)
-
-            best_loss_checkpoint_path = self._train(
-                model=model,
-                session=session,
-                train_operations_main=train_operations_main,
-                train_operations_arch=train_operations_arch,
-                train_input_x=train_input_x,
-                train_input_y=train_input_y,
-                learning_strategy_main=learning_strategy_main,
-                learning_strategy_arch=learning_strategy_arch,
-                n_epochs_main=n_epochs_main,
-                n_epochs_arch=n_epochs_arch,
-                n_epochs_interval=n_epochs_interval,
+            train_dataset, test_dataset = self._get_datasets(
+                model,
                 batch_size=batch_size,
-                checkpoints_save_dir=checkpoints_save_dir,
-                tensorboard_log_dir=tensorboard_log_dir,
-                dataset_kind=dataset_kind,
+                kind=dataset_kind,
                 add_noise=add_noise,
                 stddev=stddev,
             )
 
-            model.restore_from_checkpoint(best_loss_checkpoint_path)
+            with tf.compat.v1.Session(graph=trainable_graph) as session:
+
+                clear_train_dir = ckpt_path is None
+                tensorboard_log_dir = os.path.join(save_dir, 'tensorboard')
+                checkpoints_save_dir = os.path.join(save_dir, 'checkpoints')
+                maybe_create_dir(tensorboard_log_dir, erase_existing=clear_train_dir)
+                maybe_create_dir(checkpoints_save_dir, erase_existing=clear_train_dir)
+
+                # savers:
+                regular_checkpoints_saver = tf.compat.v1.train.Saver(
+                    var_list=tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.GLOBAL_VARIABLES),
+                    # var_list=train_operations_main.train_variables
+                    #          + train_operations_arch.train_variables
+                    #          + train_operations_main.optimizer_variables
+                    #          + train_operations_arch.optimizer_variables
+                    #          + [train_operations_main.global_step]
+                    #          + [train_operations_arch.global_step],
+                    max_to_keep=_NUMBER_OF_REGULAR_CHECKPOINTS,
+                )
+                best_loss_checkpoints_saver = tf.compat.v1.train.Saver(
+                    var_list=tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.GLOBAL_VARIABLES),
+                    # var_list=train_operations_main.train_variables
+                    #          + train_operations_arch.train_variables,
+                    max_to_keep=_NUMBER_OF_BEST_LOSS_CHECKPOINTS,
+                )
+
+                # summaries:
+                summary_writer = tf.compat.v1.summary.FileWriter(tensorboard_log_dir, session.graph)
+
+                learning_rate_summary_main = tf.compat.v1.summary.scalar(
+                    'train_learning_rate_main', train_operations_main.learning_rate)
+                loss_summary_main = tf.compat.v1.summary.scalar(
+                    'train_loss_main', train_operations_main.loss)
+
+                learning_rate_summary_arch = tf.compat.v1.summary.scalar(
+                    'train_learning_rate_arch', train_operations_arch.learning_rate)
+                loss_summary_arch = tf.compat.v1.summary.scalar(
+                    'train_loss_arch', train_operations_arch.loss)
+
+                test_mean_loss_ph = tf.compat.v1.placeholder(tf.float32, ())
+                test_loss_summary_main = tf.compat.v1.summary.scalar('test_mean_loss_main', test_mean_loss_ph)
+                test_loss_summary_arch = tf.compat.v1.summary.scalar('test_mean_loss_arch', test_mean_loss_ph)
+
+                summaries_main = Summaries(
+                    summary_writer=summary_writer,
+                    loss_summary=loss_summary_main,
+                    learning_rate_summary=learning_rate_summary_main,
+                    test_mean_loss_ph=test_mean_loss_ph,
+                    test_loss_summary=test_loss_summary_main,
+
+                )
+                summaries_arch = Summaries(
+                    summary_writer=summary_writer,
+                    loss_summary=loss_summary_arch,
+                    learning_rate_summary=learning_rate_summary_arch,
+                    test_mean_loss_ph=test_mean_loss_ph,
+                    test_loss_summary=test_loss_summary_arch,
+                )
+
+                if ckpt_path is None:
+                    session.run(tf.compat.v1.global_variables_initializer())
+                else:
+                    regular_checkpoints_saver.restore(session, ckpt_path)
+
+                training_state_main = [
+                    session.run(train_operations_main.learning_rate),  # learning_rate
+                    0,                                                 # decay_step
+                    0,                                                 # tolerance_step
+                    0,                                                 # nans_step_counter
+                    float('inf'),                                      # best_loss
+                    float('inf'),                                      # tolerance_best_loss
+                    0,                                                 # best_loss_step
+                    0,                                                 # epoch
+                ]
+
+                training_state_arch = [
+                    session.run(train_operations_main.learning_rate),  # learning_rate
+                    0,                                                 # decay_step
+                    0,                                                 # tolerance_step
+                    0,                                                 # nans_step_counter
+                    float('inf'),                                      # best_loss
+                    float('inf'),                                      # tolerance_best_loss
+                    0,                                                 # best_loss_step
+                    0,                                                 # epoch
+                ]
+
+                n_iterations = n_epochs_main // n_epochs_interval
+
+                for _ in range(n_iterations):
+
+                    LOGGER.info('\nTraining MAIN...\n')
+
+                    best_loss_checkpoint_path, training_state_main = self._train(
+                        train_dataset=train_dataset,
+                        test_dataset=test_dataset,
+                        session=session,
+                        train_operations=train_operations_main,
+                        traning_state=training_state_main,
+                        train_input_x=train_input_x,
+                        train_input_y=train_input_y,
+                        learning_strategy=learning_strategy_main,
+                        n_epochs=n_epochs_interval,
+                        checkpoints_save_dir=checkpoints_save_dir,
+                        regular_checkpoints_saver=regular_checkpoints_saver,
+                        best_loss_checkpoints_saver=best_loss_checkpoints_saver,
+                        summaries=summaries_main,
+                        save_checkpoints=True,
+                    )
+
+                    LOGGER.info('\nTraining ARCH...\n')
+
+                    _, training_state_arch = self._train(
+                        train_dataset=test_dataset,
+                        test_dataset=None,
+                        session=session,
+                        train_operations=train_operations_arch,
+                        traning_state=training_state_arch,
+                        train_input_x=train_input_x,
+                        train_input_y=train_input_y,
+                        learning_strategy=learning_strategy_arch,
+                        n_epochs=n_epochs_arch,
+                        checkpoints_save_dir=checkpoints_save_dir,
+                        regular_checkpoints_saver=regular_checkpoints_saver,
+                        best_loss_checkpoints_saver=best_loss_checkpoints_saver,
+                        summaries=summaries_arch,
+                        save_checkpoints=False,
+                    )
+
+                    variables = train_operations_arch.train_variables
+                    for v in variables:
+                        print(v.name, session.run(v))
+
+                model.restore_from_checkpoint(best_loss_checkpoint_path)
+                model.save_genotypes()
+                model.recreate_from_genome(best_loss_checkpoint_path)
+
+            if 'finetune' in mode:
+                self.finetune(
+                    recreated_model=model,
+                    recreated_model_ckpt_path=best_loss_checkpoint_path,
+                    learning_strategy_finetune=learning_strategy_finetune,
+                    batch_size=batch_size,
+                    n_epochs_finetune=n_epochs_finetune,
+                    dataset_kind=dataset_kind,
+                    add_noise=add_noise,
+                    stddev=stddev,
+                )
+            else:
+                model.save()
+
+        elif 'finetune' in mode:
+            if ckpt_path is None:
+                raise ValueError("Should provide ckp_path (of search algorithm) to recreate model for fine-tuning")
+            model.restore_from_checkpoint(ckpt_path)
             model.save_genotypes()
-            model.recreate_from_genome(best_loss_checkpoint_path)
-            model.save()
+            model.recreate_from_genome(ckpt_path)
+            self.finetune(
+                    recreated_model=model,
+                    recreated_model_ckpt_path=ckpt_path,
+                    learning_strategy_finetune=learning_strategy_finetune,
+                    batch_size=batch_size,
+                    n_epochs_finetune=n_epochs_finetune,
+                    dataset_kind=dataset_kind,
+                    add_noise=add_noise,
+                    stddev=stddev,
+                )
+        else:
+            raise ValueError(
+                f"The `mode` parameter not understood: {mode}."
+                f" Expected list or string including optional 'search' and 'finetune' keywords."
+            )
+
+    def finetune(
+            self,
+            recreated_model,
+            recreated_model_ckpt_path,
+            save_dir=None,
+            learning_strategy_finetune=None,
+            batch_size=None,
+            n_epochs_finetune=None,
+            dataset_kind='tfrecord',
+            add_noise=False,
+            stddev=0.01,
+    ):
+        save_dir = save_dir or recreated_model.model_explorer.model_folder
+
+        train_dataset, test_dataset = self._get_datasets(
+            recreated_model,
+            batch_size=batch_size,
+            kind=dataset_kind,
+            add_noise=add_noise,
+            stddev=stddev,
+        )
+
+        trainable_graph, train_operations_finetune, train_input_x, train_input_y = \
+            self._build_trainable_graph_finetune(recreated_model, learning_strategy_finetune)
+
+        with tf.compat.v1.Session(graph=trainable_graph) as session:
+
+            tensorboard_log_dir = os.path.join(save_dir, 'finetuning', 'tensorboard')
+            checkpoints_save_dir = os.path.join(save_dir, 'finetuning', 'checkpoints')
+            maybe_create_dir(tensorboard_log_dir, erase_existing=True)
+            maybe_create_dir(checkpoints_save_dir, erase_existing=True)
+
+            # savers:
+            regular_checkpoints_saver = tf.compat.v1.train.Saver(
+                var_list=tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.GLOBAL_VARIABLES),
+                max_to_keep=_NUMBER_OF_REGULAR_CHECKPOINTS,
+            )
+            best_loss_checkpoints_saver = tf.compat.v1.train.Saver(
+                var_list=tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.GLOBAL_VARIABLES),
+                max_to_keep=_NUMBER_OF_BEST_LOSS_CHECKPOINTS,
+            )
+
+            tf.compat.v1.train.Saver(
+                var_list=list(
+                    set(tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.GLOBAL_VARIABLES))
+                    - {train_operations_finetune.global_step}
+                )
+            ).restore(session, recreated_model_ckpt_path)
+            session.run(train_operations_finetune.global_step.initializer)
+            session.run([v.initializer for v in train_operations_finetune.optimizer_variables])
+
+            # summaries:
+            summary_writer = tf.compat.v1.summary.FileWriter(tensorboard_log_dir, session.graph)
+            learning_rate_summary_finetune = tf.compat.v1.summary.scalar(
+                'train_learning_rate_finetune', train_operations_finetune.learning_rate)
+            loss_summary_finetune = tf.compat.v1.summary.scalar(
+                'train_loss_finetune', train_operations_finetune.loss)
+
+            test_mean_loss_ph = tf.compat.v1.placeholder(tf.float32, ())
+            test_loss_summary_finetune = tf.compat.v1.summary.scalar('test_mean_loss_finetune', test_mean_loss_ph)
+
+            summaries_finetune = Summaries(
+                summary_writer=summary_writer,
+                loss_summary=loss_summary_finetune,
+                learning_rate_summary=learning_rate_summary_finetune,
+                test_mean_loss_ph=test_mean_loss_ph,
+                test_loss_summary=test_loss_summary_finetune,
+
+            )
+
+            training_state_finetune = [
+                session.run(train_operations_finetune.learning_rate),  # learning_rate
+                0,                                                     # decay_step
+                0,                                                     # tolerance_step
+                0,                                                     # nans_step_counter
+                float('inf'),                                          # best_loss
+                float('inf'),                                          # tolerance_best_loss
+                0,                                                     # best_loss_step
+                0,                                                     # epoch
+            ]
+
+            best_loss_checkpoint_path, training_state_finetune = self._train(
+                train_dataset=train_dataset,
+                test_dataset=test_dataset,
+                session=session,
+                train_operations=train_operations_finetune,
+                traning_state=training_state_finetune,
+                train_input_x=train_input_x,
+                train_input_y=train_input_y,
+                learning_strategy=learning_strategy_finetune,
+                n_epochs=n_epochs_finetune,
+                checkpoints_save_dir=checkpoints_save_dir,
+                regular_checkpoints_saver=regular_checkpoints_saver,
+                best_loss_checkpoints_saver=best_loss_checkpoints_saver,
+                summaries=summaries_finetune,
+                save_checkpoints=True,
+            )
+            recreated_model.restore_from_checkpoint(best_loss_checkpoint_path)
+            recreated_model.save()
 
         return best_loss_checkpoint_path
 
-    def _build_trainable_graph(
+    def _build_trainable_graph_search(
             self,
             model,
             learning_strategy_main,
@@ -287,6 +548,66 @@ class Trainer:
 
             return trainable_graph, train_operations_main, train_operations_arch, train_input_x, train_input_y
 
+    def _build_trainable_graph_finetune(
+            self,
+            model,
+            learning_strategy,
+    ):
+        trainable_graph = tf.compat.v1.Graph()
+        copy_graph(model.graph, trainable_graph)
+        model_input = get_transformed_tensor(model.input_placeholder, trainable_graph)
+        rv_output = get_transformed_tensor(model.rv_output_ph, trainable_graph)
+        model_loss = get_transformed_tensor(model.loss, trainable_graph)
+
+        # trainable_graph = model.graph
+        # model_input = model.input_placeholder
+        # rv_output = model.rv_output_ph
+        # model_loss = model.loss
+
+        with trainable_graph.as_default():
+
+            trainable_vars = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES)
+
+            regularization_loss = tf.losses.get_regularization_loss()
+            print(f"REGULARIZATION_LOSSES:{regularization_loss}")
+
+            loss = model_loss + regularization_loss
+
+            learning_rate = tf.compat.v1.placeholder_with_default(
+                learning_strategy.initial_lr,
+                shape=[],
+                name='learning_rate',
+            )
+
+            global_step = tf.train.get_or_create_global_step()
+
+            optimizer_type = learning_strategy.optimizer_type.lower()
+            if optimizer_type == 'adam':
+                optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate)
+            elif optimizer_type == 'sgd':
+                optimizer = tf.compat.v1.train.MomentumOptimizer(learning_rate, _DEFAULT_MOMENTUM)
+            else:
+                raise NotImplementedError(f'optimizer "{optimizer_type}" is not supported')
+
+            gradients = optimizer.compute_gradients(loss, var_list=trainable_vars)
+            gradients = optimizer.apply_gradients(
+                gradients,
+                global_step,
+            )
+
+            train_operations = TrainOperations(
+                gradients,
+                learning_rate,
+                loss,
+                global_step,
+                trainable_vars,
+                optimizer.variables(),
+            )
+            train_input_x = model_input
+            train_input_y = rv_output
+
+            return trainable_graph, train_operations, train_input_x, train_input_y
+
     @staticmethod
     def _get_datasets(
             model,
@@ -347,105 +668,42 @@ class Trainer:
             f"Should be one of ['tfrecord', 'hdf5']."
         )
 
+    @staticmethod
     def _train(
-            self,
-            model,
+            train_dataset,
+            test_dataset,
             session,
-            train_operations_main,
-            train_operations_arch,
+            train_operations,
+            traning_state,
             train_input_x,
             train_input_y,
-            learning_strategy_main,
-            learning_strategy_arch,
-            n_epochs_main,
-            n_epochs_arch,
-            n_epochs_interval,
-            batch_size,
+            learning_strategy,
+            n_epochs,
             checkpoints_save_dir,
-            tensorboard_log_dir,
-            dataset_kind,
-            add_noise,
-            stddev,
+            regular_checkpoints_saver,
+            best_loss_checkpoints_saver,
+            summaries,
+            save_checkpoints,
     ):
 
-        LOGGER.info(f'Total number of trainable vars {len(train_operations_main.train_variables)}')
-        LOGGER.info(f'Total number of architecture vars {len(train_operations_arch.train_variables)}')
-        LOGGER.info(f'Total number of main optimizer vars {len(train_operations_main.optimizer_variables)}')
-        LOGGER.info(f'Total number of arch optimizer vars {len(train_operations_arch.optimizer_variables)}')
+        LOGGER.info(f'Total number of trainable vars {len(train_operations.train_variables)}')
+        LOGGER.info(f'Total number of main optimizer vars {len(train_operations.optimizer_variables)}')
 
-        regular_checkpoints_saver = tf.compat.v1.train.Saver(
-            var_list=tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.GLOBAL_VARIABLES),
-            # var_list=train_operations_main.train_variables
-            #          + train_operations_arch.train_variables
-            #          + train_operations_main.optimizer_variables
-            #          + train_operations_arch.optimizer_variables
-            #          + [train_operations_main.global_step]
-            #          + [train_operations_arch.global_step],
-            max_to_keep=_NUMBER_OF_REGULAR_CHECKPOINTS,
-        )
-        best_loss_checkpoints_saver = tf.compat.v1.train.Saver(
-            var_list=tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.GLOBAL_VARIABLES),
-            # var_list=train_operations_main.train_variables
-            #          + train_operations_arch.train_variables,
-            max_to_keep=_NUMBER_OF_BEST_LOSS_CHECKPOINTS,
-        )
+        initial_learning_rate = session.run(train_operations.learning_rate)
 
-        # general summaries:
-        summary_writer = tf.compat.v1.summary.FileWriter(tensorboard_log_dir, session.graph)
-        learning_rate_summary_main = tf.compat.v1.summary.scalar(
-            'train_main_learning_rate', train_operations_main.learning_rate)
-        learning_rate_summary_arch = tf.compat.v1.summary.scalar(
-            'train_arch_learning_rate', train_operations_arch.learning_rate)
+        [
+            learning_rate,
+            decay_step,
+            tolerance_step,
+            nans_step_counter,
+            best_loss,
+            tolerance_best_loss,
+            best_loss_step,
+            epoch,
+        ] = traning_state
 
-        train_loss_summary_main = tf.compat.v1.summary.scalar('train_main_loss', train_operations_main.loss)
-        train_loss_summary_arch = tf.compat.v1.summary.scalar('train_arch_loss', train_operations_arch.loss)
-
-        # test_mean_loss_ph = tf.compat.v1.placeholder(tf.float32, ())
-        # test_loss_summary = tf.compat.v1.summary.scalar('test_mean_loss', test_mean_loss_ph)
-
-        # TODO: TMP, categorical logits and probs summaries
-        # cat_logits = session.graph.get_tensor_by_name('MixtureOutputLayer/CategoricalOutputLayer/logits/BiasAdd:0')
-        # cat_probs = session.graph.get_tensor_by_name(
-        #     'MixtureOutputLayer_1/random_variable/CategoricalOutputLayer/random_variable/Categorical/probs:0'
-        # )
-        # n_classes = cat_logits.shape.as_list()[-1]
-        # cat_logits_summaries = []
-        # cat_probs_summaries = []
-        # for n in range(n_classes):
-        #     cat_logits_summaries.append(tf.compat.v1.summary.histogram('cat_logits', cat_logits[..., n]))
-        #     cat_probs_summaries.append(tf.compat.v1.summary.histogram('cat_probs', cat_probs[..., n]))
-        # # TODO: end of TMP
-
-        initial_learning_rate_main = session.run(train_operations_main.learning_rate)
-        learning_rate_main = initial_learning_rate_main
-
-        initial_learning_rate_arch = session.run(train_operations_arch.learning_rate)
-        learning_rate_arch = initial_learning_rate_arch
-
-        decay_step_main = decay_step_arch = 0
-        tolerance_step_main = tolerance_step_arch = 0
-        nans_step_counter_main = nans_step_counter_arch = 0
-
-        best_loss_main = best_loss_arch = float('inf')
-        tolerance_best_loss_main = tolerance_best_loss_arch = float('inf')
-        best_loss_step_main = best_loss_step_arch = 0
-
-        train_dataset, test_dataset = self._get_datasets(
-            model,
-            batch_size=batch_size,
-            kind=dataset_kind,
-            add_noise=add_noise,
-            stddev=stddev,
-        )
-
-        def _reset_optimizer(which_optimizer):
-            if which_optimizer == 'main':
-                optimizer_vars = train_operations_main.optimizer_variables
-            elif which_optimizer == 'arch':
-                optimizer_vars = train_operations_arch.optimizer_variables
-            else:
-                raise ValueError(f"`which_optimizer` option not recognized")
-            # session.run(tf.compat.v1.variables_initializer(optimizer_vars))
+        def _reset_optimizer():
+            optimizer_vars = train_operations.optimizer_variables
             session.run([var.initializer for var in optimizer_vars])
 
         def _get_regular_checkpoint_path(step):
@@ -469,38 +727,6 @@ class Trainer:
             }
             res = session.run(fetches=fetches, feed_dict=feed_dict)
             return res
-
-        # def _run_test():
-        #     test_losses = []
-        #
-        #     for X_test, Y_test in test_dataset:
-        #         feed_dict = {
-        #             train_input_x: X_test,
-        #             train_input_y: Y_test,
-        #         }
-        #         fetches = {
-        #             'loss': train_operations.loss,
-        #         }
-        #
-        #         res = session.run(fetches=fetches, feed_dict=feed_dict)
-        #         test_losses.append(res['loss'])
-        #
-        #     test_mean_loss = np.mean(test_losses)
-        #     test_loss_summary_val = session.run(
-        #         test_loss_summary,
-        #         feed_dict={test_mean_loss_ph: test_mean_loss}
-        #     )
-        #     summary_writer.add_summary(test_loss_summary_val, epoch)
-
-        # def _run_cat_histograms():
-        #     cat_logits_summaries_values, cat_probs_summaries_values = session.run(
-        #         [cat_logits_summaries, cat_probs_summaries],
-        #         {train_input_x: X_train}
-        #     )
-        #     for summary_val in cat_logits_summaries_values:
-        #         summary_writer.add_summary(summary_val, global_step)
-        #     for summary_val in cat_probs_summaries_values:
-        #         summary_writer.add_summary(summary_val, global_step)
 
         def _maybe_drop_lr_tolerance(learning_strategy, lr, best_loss, tol_step, tol_best_loss):
             if learning_strategy.__class__.__name__ == 'ToleranceDropLearningStrategy':
@@ -541,10 +767,7 @@ class Trainer:
                 LOGGER.info(f'checkpoint_step is 0, reinitialize all variables...')
                 session.run([
                     var.initializer
-                    for var in train_operations_main.train_variables
-                               + train_operations_arch.train_variables
-                               + [train_operations_main.global_step]
-                               + [train_operations_arch.global_step]
+                    for var in tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.GLOBAL_VARIABLES)
                 ])
             else:
                 try:
@@ -563,13 +786,32 @@ class Trainer:
                         session,
                         oldest_ckpt_path
                     )
-            _reset_optimizer('main')
-            _reset_optimizer('arch')
+            _reset_optimizer()
             return counter
 
-        LOGGER.info('Training...')
+        def _run_test():
+            test_losses = []
 
-        for epoch in range(n_epochs_main):
+            for X_test, Y_test in test_dataset:
+                feed_dict = {
+                    train_input_x: X_test,
+                    train_input_y: Y_test,
+                }
+                fetches = {
+                    'loss': train_operations.loss,
+                }
+
+                res = session.run(fetches=fetches, feed_dict=feed_dict)
+                test_losses.append(res['loss'])
+
+            test_mean_loss = np.mean(test_losses)
+            test_loss_summary_val = session.run(
+                summaries.test_loss_summary,
+                feed_dict={summaries.test_mean_loss_ph: test_mean_loss}
+            )
+            summaries.summary_writer.add_summary(test_loss_summary_val, epoch)
+
+        for _ in range(n_epochs):
 
             epoch_start_time = time()
             epoch_steps = 0
@@ -579,161 +821,90 @@ class Trainer:
             for X_train, Y_train in train_dataset:
 
                 result = _run_train_step(
-                    train_operations=train_operations_main,
+                    train_operations=train_operations,
                     X=X_train,
                     Y=Y_train,
-                    lr=learning_rate_main,
-                    lr_summary=learning_rate_summary_main,
-                    loss_summary=train_loss_summary_main
+                    lr=learning_rate,
+                    lr_summary=summaries.learning_rate_summary,
+                    loss_summary=summaries.loss_summary
                 )
-                global_step_main = result['global_step']
+                global_step = result['global_step']
 
                 # HANDLE NAN VALUES
                 if np.isnan(result['loss']):
-                    nans_step_counter_main = _handle_nans(nans_step_counter_main, global_step_main)
+                    nans_step_counter = _handle_nans(nans_step_counter, global_step)
                     continue
 
                 # drop lr for next step if train with exponential decay
-                learning_rate_main = _maybe_drop_lr_decay(
-                    learning_strategy_main,
-                    learning_rate_main,
-                    initial_learning_rate_main,
-                    global_step_main,
-                    decay_step_main
+                learning_rate = _maybe_drop_lr_decay(
+                    learning_strategy,
+                    learning_rate,
+                    initial_learning_rate,
+                    global_step,
+                    decay_step
                 )
 
-                summary_writer.add_summary(result['learning_rate_summary'], global_step_main)
-                summary_writer.add_summary(result['loss_summary'], global_step_main)
+                summaries.summary_writer.add_summary(result['learning_rate_summary'], global_step)
+                summaries.summary_writer.add_summary(result['loss_summary'], global_step)
 
-                # TODO: TMP, categorical logits and probs summaries:
-                # if global_step % 300 == 0:
-                #     _run_cat_histograms()
-                # TODO: end of TMP
+                if result['loss'] < best_loss:
+                    best_loss, best_loss_step = result['loss'], global_step
+                    if save_checkpoints:
+                        best_loss_checkpoints_saver.save(session, _get_best_checkpoint_path(global_step))
 
-                # save best checkpoint
-                if result['loss'] < best_loss_main:
-                    best_loss_checkpoints_saver.save(session, _get_best_checkpoint_path(global_step_main))
-                    best_loss_main, best_loss_step_main = result['loss'], global_step_main
-
-                # save regular checkpoint
-                if global_step_main % _REGULAR_CHECKPOINTS_DELTA == 0:
-                    nans_step_counter_main = 0
-                    regular_checkpoints_saver.save(session, _get_regular_checkpoint_path(global_step_main))
+                if global_step % _REGULAR_CHECKPOINTS_DELTA == 0:
+                    if save_checkpoints:
+                        nans_step_counter = 0
+                        regular_checkpoints_saver.save(session, _get_regular_checkpoint_path(global_step))
 
                 # reset optimizer parameters for next cosine phase
-                if learning_strategy_main.__class__.__name__ == 'ExpDecayLearningStrategy':
-                    if learning_strategy_main.lr_cos_steps is not None:
-                        if global_step_main % learning_strategy_main.lr_cos_steps == 0 and global_step_main > 0:
+                if learning_strategy.__class__.__name__ == 'ExpDecayLearningStrategy':
+                    if learning_strategy.lr_cos_steps is not None:
+                        if global_step % learning_strategy.lr_cos_steps == 0 and global_step > 0:
                             LOGGER.info('Reinitialize optimizer...')
-                            _reset_optimizer('main')
-                            decay_step_main = 0
+                            _reset_optimizer()
+                            decay_step = 0
 
-                decay_step_main += 1
+                decay_step += 1
                 epoch_steps += 1
 
             # drop lr for next epoch if train with tolerance
-            learning_rate_main, tolerance_step_main, tolerance_best_loss_main = _maybe_drop_lr_tolerance(
-                learning_strategy=learning_strategy_main,
-                lr=learning_rate_main,
-                best_loss=best_loss_main,
-                tol_step=tolerance_step_main,
-                tol_best_loss=tolerance_best_loss_main,
+            learning_rate, tolerance_step, tolerance_best_loss = _maybe_drop_lr_tolerance(
+                learning_strategy=learning_strategy,
+                lr=learning_rate,
+                best_loss=best_loss,
+                tol_step=tolerance_step,
+                tol_best_loss=tolerance_best_loss,
             )
 
             epoch_time = time() - epoch_start_time
             avg_step_time = epoch_time / epoch_steps
 
-            # # TEST
-            # test_start_time = time()
-            # _run_test()
-            # test_time = time() - test_start_time
-
             LOGGER.info(
-                f' === Main ==='
-                f' = Minimal loss value = {best_loss_main},\n'
+                f' = Minimal loss value = {best_loss},\n'
                 f' - {epoch_steps} steps took {epoch_time:.1f} seconds, avg_step_time={avg_step_time:.3f}\n'
             )
 
-            if epoch % n_epochs_interval == 0 and epoch > 0:
+            # TEST
+            if test_dataset is not None:
+                test_start_time = time()
+                _run_test()
+                test_time = time() - test_start_time
+                LOGGER.info(f' - test time: {test_time:.1f} seconds')
 
-                LOGGER.info(f"\tStart architecture training...")
+            epoch += 1
 
-                for epoch_arch in range(n_epochs_arch):
+        best_checkpoint_path = _get_best_checkpoint_path(best_loss_step)
 
-                    LOGGER.info(f"\tEpoch: {epoch_arch + 1}")
+        training_state = [
+            learning_rate,
+            decay_step,
+            tolerance_step,
+            nans_step_counter,
+            best_loss,
+            tolerance_best_loss,
+            best_loss_step,
+            epoch,
+        ]
 
-                    epoch_start_time = time()
-                    epoch_steps = 0
-
-                    for X_train_arch, Y_train_arch in test_dataset:
-
-                        result = _run_train_step(
-                            train_operations=train_operations_arch,
-                            X=X_train_arch,
-                            Y=Y_train_arch,
-                            lr=learning_rate_arch,
-                            lr_summary=learning_rate_summary_arch,
-                            loss_summary=train_loss_summary_arch
-                        )
-                        global_step_arch = result['global_step']
-
-                        # HANDLE NAN VALUES
-                        if np.isnan(result['loss']):
-                            nans_step_counter_main = _handle_nans(nans_step_counter_main, global_step_main)
-                            continue
-
-                        # drop lr for next step if train with exponential decay
-                        learning_rate_arch = _maybe_drop_lr_decay(
-                            learning_strategy_arch,
-                            learning_rate_arch,
-                            initial_learning_rate_arch,
-                            global_step_arch,
-                            decay_step_arch
-                        )
-
-                        summary_writer.add_summary(result['learning_rate_summary'], global_step_arch)
-                        summary_writer.add_summary(result['loss_summary'], global_step_arch)
-
-                        if result['loss'] < best_loss_arch:
-                            # best_loss_checkpoints_saver.save(session, _get_best_checkpoint_path(global_step_arch))
-                            best_loss_arch, best_loss_step_arch = result['loss'], global_step_arch
-
-                        # reset optimizer parameters for next cosine phase
-                        if learning_strategy_arch.__class__.__name__ == 'ExpDecayLearningStrategy':
-                            if learning_strategy_arch.lr_cos_steps is not None:
-                                if global_step_arch % learning_strategy_arch.lr_cos_steps == 0 and global_step_arch > 0:
-                                    LOGGER.info('\tReinitialize optimizer...')
-                                    _reset_optimizer('main')
-                                    decay_step_arch = 0
-
-                        decay_step_arch += 1
-                        epoch_steps += 1
-
-                    # drop lr for next epoch if train with tolerance
-                    learning_rate_arch, tolerance_step_arch, tolerance_best_loss_arch = _maybe_drop_lr_tolerance(
-                        learning_strategy=learning_strategy_arch,
-                        lr=learning_rate_arch,
-                        best_loss=best_loss_arch,
-                        tol_step=tolerance_step_arch,
-                        tol_best_loss=tolerance_best_loss_arch,
-                    )
-
-                    epoch_time = time() - epoch_start_time
-                    avg_step_time = epoch_time / epoch_steps
-
-                    LOGGER.info(
-                        f'\t === Arch ==='
-                        f'\t = Minimal loss value = {best_loss_arch},\n'
-                        f'\t - {epoch_steps} steps took {epoch_time:.1f} seconds, avg_step_time={avg_step_time:.3f}\n'
-                    )
-
-                # variables = session.run(train_operations_arch.train_variables)
-                # for v in variables:
-                #     print(v)
-                variables = train_operations_arch.train_variables
-                for v in variables:
-                    print(v.name, session.run(v))
-
-        best_checkpoint_path = _get_best_checkpoint_path(best_loss_step_main)
-
-        return best_checkpoint_path
+        return best_checkpoint_path, training_state

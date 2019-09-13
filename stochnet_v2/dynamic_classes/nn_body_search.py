@@ -3,9 +3,9 @@ import tensorflow as tf
 import tensorflow_probability as tfp
 
 from stochnet_v2.dynamic_classes.op_registry import OP_REGISTRY
-from stochnet_v2.dynamic_classes.op_registry import simple_dense as dense
+# from stochnet_v2.dynamic_classes.op_registry import simple_dense as dense
 # from stochnet_v2.dynamic_classes.op_registry import rich_dense_1 as dense  # TODO: ?
-# from stochnet_v2.dynamic_classes.op_registry import rich_dense_2 as dense  # TODO: ?
+from stochnet_v2.dynamic_classes.op_registry import rich_dense_2 as dense  # TODO: ?
 from stochnet_v2.dynamic_classes.genotypes import Genotype
 from stochnet_v2.dynamic_classes.genotypes import PRIMITIVES
 from stochnet_v2.dynamic_classes.util import expand_cell
@@ -26,7 +26,7 @@ def mixed_op(x, expansion_coeff):
             initializer=tf.compat.v1.ones_initializer,
             trainable=True,
         )
-        regularizer_scale = 0.001
+        regularizer_scale = 0.01
         alphas_reg_loss_1 = l1_regularizer(alphas, regularizer_scale)
 
         alphas = tf.nn.softmax(alphas)
@@ -159,7 +159,8 @@ def get_genotypes(session, n_cells, cell_size):
 
         for i in range(cell_size):
             edges = []
-            edges_alphas = []
+            edges_scores = []
+            print(f"STATE {i+2}:")
 
             for j in range(i + 2):
 
@@ -174,19 +175,29 @@ def get_genotypes(session, n_cells, cell_size):
                 alpha = alpha[0]
 
                 alpha_value = session.run(alpha)
-                value_argsort = alpha_value.argsort()
-                # max_index = \
-                #     value_sorted[-2] \
-                #     if value_sorted[-1] == PRIMITIVES.index('none') \
-                #     else value_sorted[-1]
-                max_index = value_argsort[-1]
+                print(f"\t{alpha_name}: {alpha_value}")
 
-                edges.append((PRIMITIVES[max_index], j))
-                edges_alphas.append(alpha_value[max_index])
+                alpha_value_argsort = alpha_value.argsort()
+                max_index = alpha_value_argsort[-1]
+                edge_candidate = PRIMITIVES[max_index]
+                edge_score = alpha_value[max_index]
+                print(f"\t{j}-th state via {edge_candidate.upper()}"
+                      f" (max_index={max_index}, score={edge_score:.2f})")
+                edges.append((edge_candidate, j))
+                edges_scores.append(edge_score)
 
-            edges_alphas = np.array(edges_alphas)
-            argsort = np.argsort(edges_alphas)
-            max_edges = [edges[argsort[-1]], edges[argsort[-2]]]
+            edges_scores = np.array(edges_scores)
+            print(f"edges_scores = {edges_scores}")
+
+            edges_scores_argsort = np.argsort(edges_scores)[::-1]  # decreasing order
+            edges_sorted = [
+                edges[i]
+                for i in edges_scores_argsort
+                # if edges[i][0] != 'none'
+            ]
+            max_edges = edges_sorted[:2]
+
+            print(f"max_edges = {max_edges}\n")
             result.extend(max_edges)
 
         return result
