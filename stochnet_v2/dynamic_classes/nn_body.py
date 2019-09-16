@@ -18,8 +18,10 @@ def cell(
 ):
     if expand:
         op_names, indices = zip(*genotype.expand)
+        states_summ = genotype.expand_summ
     else:
         op_names, indices = zip(*genotype.normal)
+        states_summ = genotype.normal_summ
 
     cell_size = len(op_names) // 2
 
@@ -60,7 +62,16 @@ def cell(
             else:
                 state.append(-1)
 
-        out = next((x for x in state[::-1] if x != -1), s0 + s1)
+        # out = next((x for x in state[::-1] if x != -1), s0 + s1)
+        summ_candidates = []
+        for idx in states_summ:
+            candidate = state[idx]
+            if candidate != -1:
+                summ_candidates.append(candidate)
+        if len(summ_candidates) == 0:
+            summ_candidates = [s0, s1]
+
+        out = tf.compat.v1.add_n(summ_candidates)
 
     return out
 

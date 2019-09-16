@@ -100,6 +100,7 @@ def cell(
         expand_prev,
         expansion_multiplier,
         cell_index,
+        n_summ_states=2,
 ):
 
     with tf.compat.v1.variable_scope(f"{'expand' if expand else 'normal'}_cell_{cell_index}"):
@@ -127,12 +128,13 @@ def cell(
                 new_state = tf.add_n(tmp)
             state.append(new_state)
 
-        out = state[-1]
+        # out = state[-1]
+        out = tf.compat.v1.add_n(state[-n_summ_states:])
 
     return out
 
 
-def body(x, n_cells=4, cell_size=4, expansion_multiplier=4):
+def body(x, n_cells=4, cell_size=4, expansion_multiplier=4, n_summ_states=2):
     # out_dim = x.shape.as_list()[-1]
     # s0 = tf.compat.v1.layers.Dense(out_dim, activation='relu')(x)
     # s1 = tf.compat.v1.layers.Dense(out_dim, activation='relu')(x)
@@ -142,13 +144,13 @@ def body(x, n_cells=4, cell_size=4, expansion_multiplier=4):
 
     for n in range(n_cells):
         expand = expand_cell(n, n_cells)
-        s0, s1 = s1, cell(s0, s1, cell_size, expand, expand_prev, expansion_multiplier, n)
+        s0, s1 = s1, cell(s0, s1, cell_size, expand, expand_prev, expansion_multiplier, n, n_summ_states)
         expand_prev = expand
 
     return s1
 
 
-def get_genotypes(session, n_cells, cell_size):
+def get_genotypes(session, n_cells, cell_size, n_summ_states):
 
     def _parse(_expand, cell_index):
 
@@ -208,11 +210,18 @@ def get_genotypes(session, n_cells, cell_size):
 
     for n in range(n_cells):
         expand = expand_cell(n, n_cells)
+        summ_states = list(range(cell_size + 2 - n_summ_states, cell_size + 2))
         gene = _parse(expand, n)
         if expand:
-            genotype = Genotype(normal=(), expand=gene)
+            genotype = Genotype(
+                normal=(), normal_summ=(),
+                expand=gene, expand_summ=summ_states
+            )
         else:
-            genotype = Genotype(normal=gene, expand=())
+            genotype = Genotype(
+                normal=gene, normal_summ=summ_states,
+                expand=(), expand_summ=()
+            )
         genotypes.append(genotype)
 
     return genotypes
