@@ -1,9 +1,9 @@
 import tensorflow as tf
 
 from stochnet_v2.dynamic_classes.op_registry import OP_REGISTRY
-# from stochnet_v2.dynamic_classes.op_registry import simple_dense as dense
+from stochnet_v2.dynamic_classes.op_registry import simple_dense as dense
 # from stochnet_v2.dynamic_classes.op_registry import rich_dense_1 as dense  # TODO: ?
-from stochnet_v2.dynamic_classes.op_registry import rich_dense_2 as dense  # TODO: ?
+# from stochnet_v2.dynamic_classes.op_registry import rich_dense_2 as dense  # TODO: ?
 from stochnet_v2.dynamic_classes.util import expand_cell
 
 
@@ -67,9 +67,11 @@ def cell(
 
 def body(x, genotypes, expansion_multiplier=4):
     n_cells = len(genotypes)
-    out_dim = x.shape.as_list()[-1]
-    s0 = tf.compat.v1.layers.Dense(out_dim, activation='relu')(x)
-    s1 = tf.compat.v1.layers.Dense(out_dim, activation='relu')(x)
+    # out_dim = x.shape.as_list()[-1]
+    # s0 = tf.compat.v1.layers.Dense(out_dim, activation='relu')(x)
+    # s1 = tf.compat.v1.layers.Dense(out_dim, activation='relu')(x)
+    s0 = tf.compat.v1.identity(x)
+    s1 = tf.compat.v1.identity(x)
     expand_prev = False
 
     for n in range(n_cells):

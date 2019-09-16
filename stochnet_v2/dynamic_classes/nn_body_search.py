@@ -3,9 +3,9 @@ import tensorflow as tf
 import tensorflow_probability as tfp
 
 from stochnet_v2.dynamic_classes.op_registry import OP_REGISTRY
-# from stochnet_v2.dynamic_classes.op_registry import simple_dense as dense
+from stochnet_v2.dynamic_classes.op_registry import simple_dense as dense
 # from stochnet_v2.dynamic_classes.op_registry import rich_dense_1 as dense  # TODO: ?
-from stochnet_v2.dynamic_classes.op_registry import rich_dense_2 as dense  # TODO: ?
+# from stochnet_v2.dynamic_classes.op_registry import rich_dense_2 as dense  # TODO: ?
 from stochnet_v2.dynamic_classes.genotypes import Genotype
 from stochnet_v2.dynamic_classes.genotypes import PRIMITIVES
 from stochnet_v2.dynamic_classes.util import expand_cell
@@ -68,7 +68,7 @@ def mixed_op_cat(x, expansion_coeff):
             trainable=True,
         )
 
-        regularizer_scale = 0.001
+        regularizer_scale = 0.01
         alphas_reg_loss_1 = l1_regularizer(alphas, regularizer_scale)
 
         alphas = tf.nn.softmax(alphas)
@@ -133,9 +133,11 @@ def cell(
 
 
 def body(x, n_cells=4, cell_size=4, expansion_multiplier=4):
-    out_dim = x.shape.as_list()[-1]
-    s0 = tf.compat.v1.layers.Dense(out_dim, activation='relu')(x)
-    s1 = tf.compat.v1.layers.Dense(out_dim, activation='relu')(x)
+    # out_dim = x.shape.as_list()[-1]
+    # s0 = tf.compat.v1.layers.Dense(out_dim, activation='relu')(x)
+    # s1 = tf.compat.v1.layers.Dense(out_dim, activation='relu')(x)
+    s0 = tf.compat.v1.identity(x)
+    s1 = tf.compat.v1.identity(x)
     expand_prev = False
 
     for n in range(n_cells):
