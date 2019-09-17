@@ -65,6 +65,7 @@ _NUMBER_OF_REGULAR_CHECKPOINTS = 10
 _NUMBER_OF_BEST_LOSS_CHECKPOINTS = 5
 _REGULAR_CHECKPOINTS_DELTA = 1000
 _DEFAULT_NUMBER_OF_EPOCHS_MAIN = 100
+_DEFAULT_NUMBER_OF_EPOCHS_HEAT_UP = 10
 _DEFAULT_N_EPOCHS_INTERVAL = 5
 _DEFAULT_NUMBER_OF_EPOCHS_ARCH = 5
 _DEFAULT_BATCH_SIZE = 1024
@@ -97,6 +98,7 @@ class Trainer:
             self,
             model,
             n_epochs_main=None,
+            n_epochs_heat_up=None,
             n_epochs_arch=None,
             n_epochs_interval=None,
             n_epochs_finetune=None,
@@ -112,27 +114,14 @@ class Trainer:
             mode='search_finetune'
     ):
         save_dir = save_dir or model.model_explorer.model_folder
-
-        if batch_size is None:
-            batch_size = _DEFAULT_BATCH_SIZE
-
-        if n_epochs_main is None:
-            n_epochs_main = _DEFAULT_NUMBER_OF_EPOCHS_MAIN
-
-        if n_epochs_arch is None:
-            n_epochs_arch = _DEFAULT_NUMBER_OF_EPOCHS_ARCH
-
-        if n_epochs_interval is None:
-            n_epochs_interval = _DEFAULT_N_EPOCHS_INTERVAL
-
-        if learning_strategy_main is None:
-            learning_strategy_main = _DEFAULT_LEARNING_STRATEGY
-
-        if learning_strategy_arch is None:
-            learning_strategy_arch = _DEFAULT_LEARNING_STRATEGY
-
-        if learning_strategy_finetune is None:
-            learning_strategy_finetune = _DEFAULT_LEARNING_STRATEGY
+        batch_size = batch_size or _DEFAULT_BATCH_SIZE
+        n_epochs_main = n_epochs_main or _DEFAULT_NUMBER_OF_EPOCHS_MAIN
+        n_epochs_heat_up = n_epochs_heat_up or _DEFAULT_NUMBER_OF_EPOCHS_HEAT_UP
+        n_epochs_arch = n_epochs_arch or _DEFAULT_NUMBER_OF_EPOCHS_ARCH
+        n_epochs_interval = n_epochs_interval or _DEFAULT_N_EPOCHS_INTERVAL
+        learning_strategy_main = learning_strategy_main or _DEFAULT_LEARNING_STRATEGY
+        learning_strategy_arch = learning_strategy_arch or _DEFAULT_LEARNING_STRATEGY
+        learning_strategy_finetune = learning_strategy_finetune or _DEFAULT_LEARNING_STRATEGY
 
         if 'search' in mode:
             trainable_graph, train_operations_main, train_operations_arch, train_input_x, train_input_y = \
@@ -157,18 +146,10 @@ class Trainer:
                 # savers:
                 regular_checkpoints_saver = tf.compat.v1.train.Saver(
                     var_list=tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.GLOBAL_VARIABLES),
-                    # var_list=train_operations_main.train_variables
-                    #          + train_operations_arch.train_variables
-                    #          + train_operations_main.optimizer_variables
-                    #          + train_operations_arch.optimizer_variables
-                    #          + [train_operations_main.global_step]
-                    #          + [train_operations_arch.global_step],
                     max_to_keep=_NUMBER_OF_REGULAR_CHECKPOINTS,
                 )
                 best_loss_checkpoints_saver = tf.compat.v1.train.Saver(
                     var_list=tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.GLOBAL_VARIABLES),
-                    # var_list=train_operations_main.train_variables
-                    #          + train_operations_arch.train_variables,
                     max_to_keep=_NUMBER_OF_BEST_LOSS_CHECKPOINTS,
                 )
 
@@ -232,9 +213,20 @@ class Trainer:
                     0,                                                 # epoch
                 ]
 
-                n_iterations = n_epochs_main // n_epochs_interval
+                # n_iterations = n_epochs_main // n_epochs_interval
+                # for _ in range(n_iterations):
 
-                for _ in range(n_iterations):
+                iteration = 0
+                epoch = 0
+
+                while not epoch >= n_epochs_main:
+
+                    if iteration == 0:
+                        train_epochs_main = n_epochs_heat_up
+                        train_epochs_arch = n_epochs_arch
+                    else:
+                        train_epochs_main = min(epoch + n_epochs_interval, n_epochs_main) - epoch
+                        train_epochs_arch = n_epochs_arch if train_epochs_main == n_epochs_interval else 0
 
                     LOGGER.info('\nTraining MAIN...\n')
 
@@ -247,7 +239,7 @@ class Trainer:
                         train_input_x=train_input_x,
                         train_input_y=train_input_y,
                         learning_strategy=learning_strategy_main,
-                        n_epochs=n_epochs_interval,
+                        n_epochs=train_epochs_main,
                         checkpoints_save_dir=checkpoints_save_dir,
                         regular_checkpoints_saver=regular_checkpoints_saver,
                         best_loss_checkpoints_saver=best_loss_checkpoints_saver,
@@ -255,28 +247,33 @@ class Trainer:
                         save_checkpoints=True,
                     )
 
-                    LOGGER.info('\nTraining ARCH...\n')
+                    if train_epochs_arch > 0:
 
-                    _, training_state_arch = self._train(
-                        train_dataset=test_dataset,
-                        test_dataset=None,
-                        session=session,
-                        train_operations=train_operations_arch,
-                        traning_state=training_state_arch,
-                        train_input_x=train_input_x,
-                        train_input_y=train_input_y,
-                        learning_strategy=learning_strategy_arch,
-                        n_epochs=n_epochs_arch,
-                        checkpoints_save_dir=checkpoints_save_dir,
-                        regular_checkpoints_saver=regular_checkpoints_saver,
-                        best_loss_checkpoints_saver=best_loss_checkpoints_saver,
-                        summaries=summaries_arch,
-                        save_checkpoints=False,
-                    )
+                        LOGGER.info('\nTraining ARCH...\n')
 
-                    variables = train_operations_arch.train_variables
-                    for v in variables:
-                        print(v.name, session.run(v))
+                        _, training_state_arch = self._train(
+                            train_dataset=test_dataset,
+                            test_dataset=None,
+                            session=session,
+                            train_operations=train_operations_arch,
+                            traning_state=training_state_arch,
+                            train_input_x=train_input_x,
+                            train_input_y=train_input_y,
+                            learning_strategy=learning_strategy_arch,
+                            n_epochs=train_epochs_arch,
+                            checkpoints_save_dir=checkpoints_save_dir,
+                            regular_checkpoints_saver=regular_checkpoints_saver,
+                            best_loss_checkpoints_saver=best_loss_checkpoints_saver,
+                            summaries=summaries_arch,
+                            save_checkpoints=False,
+                        )
+
+                        variables = train_operations_arch.train_variables
+                        for v in variables:
+                            print(v.name, session.run(v))
+
+                    epoch += train_epochs_main
+                    iteration += 1
 
                 model.restore_from_checkpoint(best_loss_checkpoint_path)
                 model.save_genotypes()
@@ -443,14 +440,6 @@ class Trainer:
             arch_vars = [v for v in trainable_vars if 'architecture_variables' in v.name]
             main_vars = list(set(trainable_vars) - set(arch_vars))
 
-            # print(f"\n\n == Main variables:")
-            # for var in main_vars:
-            #     print(var)
-            #
-            # print(f"\n\n == Arch variables:")
-            # for var in arch_vars:
-            #     print(var)
-
             # MAIN:
             global_step_main = tf.Variable(0, trainable=False, name='global_step_main')
 
@@ -494,10 +483,6 @@ class Trainer:
                 optimizer_main.variables(),
             )
 
-            # print(f"Main optimizer: {optimizer_main}")
-            # for var in optimizer_main.variables():
-            #     print(var)
-
             # ARCHITECTURE:
             global_step_arch = tf.Variable(0, trainable=False, name='global_step_arch')
 
@@ -538,10 +523,6 @@ class Trainer:
                 arch_vars,
                 optimizer_arch.variables(),
             )
-
-            # print(f"Arch optimizer: {optimizer_arch}")
-            # for var in optimizer_arch.variables():
-            #     print(var)
 
             train_input_x = model_input
             train_input_y = rv_output

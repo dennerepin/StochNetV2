@@ -32,12 +32,14 @@ class NASStochNet(StochNet):
         self.n_cells = body_config['n_cells']
         self.expansion_multiplier = body_config['expansion_multiplier']
         self.cell_size = body_config['cell_size']
+        self.n_summ_states = body_config['n_summ_states']
         return partial(_body_search, **body_config)
 
-    def save_genotypes(self, n_cells=None, cell_size=None):
+    def save_genotypes(self, n_cells=None, cell_size=None, n_summ_states=None):
         n_cells = n_cells or self.n_cells
         cell_size = cell_size or self.cell_size
-        genotypes = get_genotypes(self.session, n_cells=n_cells, cell_size=cell_size)
+        n_summ_states = n_summ_states or self.n_summ_states
+        genotypes = get_genotypes(self.session, n_cells=n_cells, cell_size=cell_size, n_summ_states=n_summ_states)
         with open(os.path.join(self.model_explorer.model_folder, 'genotypes.pickle'), 'wb') as f:
             pickle.dump(genotypes, f)
 
@@ -102,6 +104,6 @@ class NASStochNet(StochNet):
         print("Custom restore")
         for v in model_variables:
             name = v.name.replace(':0', '')
-            # print(name, v.shape, reader.get_tensor(name).shape)
+            print(name, v.shape, reader.get_tensor(name).shape)
             self.session.run(v.assign(reader.get_tensor(name)))
         self.restored = True

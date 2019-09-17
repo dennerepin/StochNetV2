@@ -2,6 +2,8 @@ import tensorflow as tf
 from stochnet_v2.utils.registry import Registry
 from stochnet_v2.dynamic_classes.util import expand_identity
 from stochnet_v2.dynamic_classes.util import expand_element_wise
+from stochnet_v2.dynamic_classes.util import dense
+from stochnet_v2.dynamic_classes.util import dense_relu
 from stochnet_v2.dynamic_classes.util import relu_dense_bn
 from stochnet_v2.dynamic_classes.util import bn_dense_relu
 
@@ -11,8 +13,12 @@ OP_REGISTRY = Registry(name="OpRegistry")
 
 @OP_REGISTRY.register('simple_dense')
 def simple_dense(x, expansion_coeff):
-    n_units = x.shape.as_list()[-1] * expansion_coeff
-    return tf.compat.v1.layers.Dense(n_units)(x)
+    return dense(x, expansion_coeff)
+
+
+@OP_REGISTRY.register('rich_dense_0')
+def rich_dense_0(x, expansion_coeff):
+    return dense_relu(x, expansion_coeff)
 
 
 @OP_REGISTRY.register('rich_dense_1')

@@ -1,6 +1,11 @@
 import tensorflow as tf
 
 
+initializer = tf.initializers.glorot_normal
+# initializer = tf.compat.v1.initializers.variance_scaling(mode='fan_out', distribution="truncated_normal")
+# initializer = None
+
+
 def expand_cell(n, n_cells):
     if n_cells >= 4:
         if n in [n_cells // 3, 2 * n_cells // 3]:
@@ -89,11 +94,16 @@ def expand_element_wise(
     return x
 
 
+def dense(x, expansion_coeff):
+    n_units = x.shape.as_list()[-1] * expansion_coeff
+    return tf.compat.v1.layers.Dense(n_units, kernel_initializer=initializer)(x)
+
+
 def relu_dense_bn(x, expansion_coeff):
     n_units = x.shape.as_list()[-1] * expansion_coeff
     with tf.variable_scope("ReluDenseBN"):
         x = tf.compat.v1.nn.relu(x)
-        x = tf.compat.v1.layers.Dense(n_units)(x)
+        x = tf.compat.v1.layers.Dense(n_units, kernel_initializer=initializer)(x)
         x = tf.compat.v1.layers.BatchNormalization()(x)
     return x
 
@@ -102,6 +112,14 @@ def bn_dense_relu(x, expansion_coeff):
     n_units = x.shape.as_list()[-1] * expansion_coeff
     with tf.variable_scope("BNDenseRelu"):
         x = tf.compat.v1.layers.BatchNormalization()(x)
-        x = tf.compat.v1.layers.Dense(n_units)(x)
+        x = tf.compat.v1.layers.Dense(n_units, kernel_initializer=initializer)(x)
+        x = tf.compat.v1.nn.relu(x)
+    return x
+
+
+def dense_relu(x, expansion_coeff):
+    n_units = x.shape.as_list()[-1] * expansion_coeff
+    with tf.variable_scope("DenseRelu"):
+        x = tf.compat.v1.layers.Dense(n_units, kernel_initializer=initializer)(x)
         x = tf.compat.v1.nn.relu(x)
     return x
