@@ -596,12 +596,14 @@ class MixtureOutputLayer(RandomVariableOutputLayer):
             self._number_of_output_neurons += component.number_of_output_neurons
 
     def add_layer_on_top(self, base):
-        return self._add_layer_on_top_share(base)
+        # return self._add_layer_on_top_share(base)
         # return self._add_layer_on_top_individual(base)
-        # return self._add_layer_on_top_individual_cat(base)
+        return self._add_layer_on_top_individual_cat(base)
 
     def _add_layer_on_top_share(self, base):
         # all components onto the same base
+        print("Mixture components share nn outputs")
+        print(f'base shape: {base.shape.as_list()}')
         with tf.variable_scope(self.name_scope):
             categorical_layer = self.categorical.add_layer_on_top(base)
             components_layers = [component.add_layer_on_top(base) for component in self.components]
@@ -609,13 +611,14 @@ class MixtureOutputLayer(RandomVariableOutputLayer):
             return tf.concat(mixture_layers, axis=-1)
 
     def _add_layer_on_top_individual(self, base):
+        print("Mixture components use individual slices of nn outputs")
         # individual slice for each component
         n_slices = len(self.components) + 1
         slice_dim = base.shape.as_list()[-1]
         slice_size = slice_dim // n_slices
         cat_slice_size = slice_size + slice_dim % n_slices
 
-        print(f'base shape: {base.shape}')
+        print(f'base shape: {base.shape.as_list()}')
 
         components_outputs = []
 
@@ -648,10 +651,12 @@ class MixtureOutputLayer(RandomVariableOutputLayer):
 
     def _add_layer_on_top_individual_cat(self, base):
         # separate slice for categorical, shared for other
-        print(f'base shape: {base.shape}')
         slice_dim = base.shape.as_list()[-1]
         n_slices = len(self.components) + 1
         cat_slice_size = slice_dim // n_slices * 2
+
+        print("Mixture components share nn outputs and categorical has individual slice")
+        print(f'base shape: {base.shape.as_list()}')
 
         components_outputs = []
 

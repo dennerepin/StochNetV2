@@ -270,7 +270,13 @@ class Trainer:
 
                         variables = train_operations_arch.train_variables
                         for v in variables:
-                            print(v.name, session.run(v))
+                            v_softmax_name = v.name.replace('alphas:0', 'Softmax:0')
+                            v_val, v_softmax_val = session.run([v, v_softmax_name])
+                            print(
+                                f"{v.name} \n"
+                                f"\t{v_val} -> \n"
+                                f"\t{v_softmax_val} \n"
+                            )
 
                     epoch += train_epochs_main
                     iteration += 1

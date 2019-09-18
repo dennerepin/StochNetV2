@@ -12,7 +12,6 @@ from stochnet_v2.dynamic_classes.genotypes import PRIMITIVES
 from stochnet_v2.dynamic_classes.util import expand_cell
 from stochnet_v2.dynamic_classes.util import l1_regularizer
 from stochnet_v2.dynamic_classes.util import l2_regularizer
-from stochnet_v2.dynamic_classes.util import softmax_sparsity_regularizer
 
 
 tfd = tfp.distributions
@@ -27,13 +26,9 @@ def mixed_op(x, expansion_coeff):
             initializer=tf.compat.v1.ones_initializer,
             trainable=True,
         )
-        regularizer_scale = 0.01
-        alphas_reg_loss_1 = l1_regularizer(alphas, regularizer_scale)
 
         alphas = tf.nn.softmax(alphas)
-        alphas_reg_loss_2 = softmax_sparsity_regularizer(alphas, 2 * regularizer_scale * len(PRIMITIVES) ** 2)
-
-        alphas_reg_loss = alphas_reg_loss_1 + alphas_reg_loss_2
+        alphas_reg_loss = - l2_regularizer(alphas, 0.01)
         tf.compat.v1.add_to_collection('architecture_regularization_losses', alphas_reg_loss)
 
     outputs = []
@@ -69,13 +64,8 @@ def mixed_op_cat(x, expansion_coeff):
             trainable=True,
         )
 
-        regularizer_scale = 0.01
-        alphas_reg_loss_1 = l1_regularizer(alphas, regularizer_scale)
-
         alphas = tf.nn.softmax(alphas)
-        alphas_reg_loss_2 = softmax_sparsity_regularizer(alphas, 2 * regularizer_scale * len(PRIMITIVES) ** 2)
-
-        alphas_reg_loss = alphas_reg_loss_1 + alphas_reg_loss_2
+        alphas_reg_loss = - l2_regularizer(alphas, 0.01)
         tf.compat.v1.add_to_collection('architecture_regularization_losses', alphas_reg_loss)
 
     outputs = []
@@ -198,7 +188,6 @@ def get_genotypes(session, n_cells, cell_size, n_summ_states):
             edges_sorted = [
                 edges[i]
                 for i in edges_scores_argsort
-                # if edges[i][0] != 'none'
             ]
             max_edges = edges_sorted[:2]
 

@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import pickle
+import shutil
 from collections import namedtuple
 from functools import partial
 from sklearn.preprocessing.data import StandardScaler, MinMaxScaler
@@ -105,6 +106,7 @@ class StochNet:
 
             if mode == 'normal':
                 self._init_normal(body_config_path, mixture_config_path, ckpt_path)
+                self._copy_dataset_scaler()
 
             elif mode == 'inference':
                 self._load_model_from_frozen_graph()
@@ -119,7 +121,7 @@ class StochNet:
 
             LOGGER.info(f"Model created in {mode} mode.")
 
-        self.scaler = self.load_scaler()
+        self.scaler = self._load_scaler()
 
     def _init_normal(
             self,
@@ -313,10 +315,29 @@ class StochNet:
     def dest_nodes(self):
         return [t.split(':')[0] for t in [self._sample_tensor_name, self._pred_tensor_name]]
 
-    def load_scaler(self):
-        with open(self.dataset_explorer.scaler_fp, 'rb') as file:
+    def _copy_dataset_scaler(self):
+        print('Copying dataset scaler to model dir...')
+        scaler_fp = os.path.join(self.model_explorer.model_folder, 'scaler.pickle')
+        shutil.copy2(
+            self.dataset_explorer.scaler_fp,
+            scaler_fp,
+        )
+
+    def _load_scaler(self):
+        scaler_fp = os.path.join(self.model_explorer.model_folder, 'scaler.pickle')
+        with open(scaler_fp, 'rb') as file:
             scaler = pickle.load(file)
         return scaler
+
+    # def load_scaler(self):
+    #     with open(self.dataset_explorer.scaler_fp, 'rb') as file:
+    #         scaler = pickle.load(file)
+    #     return scaler
+
+    # def _save_scaler(self):
+    #     scaler_fp = os.path.join(self.model_explorer.model_folder, 'scaler.pickle')
+    #     with open(scaler_fp, 'wb') as file:
+    #         pickle.dump(self.scaler, file)
 
     def rescale(self, data):
         if isinstance(self.scaler, StandardScaler):
