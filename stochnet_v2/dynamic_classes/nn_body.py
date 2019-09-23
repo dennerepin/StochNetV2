@@ -1,10 +1,10 @@
 import tensorflow as tf
 
 from stochnet_v2.dynamic_classes.op_registry import OP_REGISTRY
-# from stochnet_v2.dynamic_classes.op_registry import simple_dense as dense  # TODO: ?
-from stochnet_v2.dynamic_classes.op_registry import rich_dense_0 as dense  # TODO: ?
-# from stochnet_v2.dynamic_classes.op_registry import rich_dense_1 as dense  # TODO: ?
-# from stochnet_v2.dynamic_classes.op_registry import rich_dense_2 as dense  # TODO: ?
+from stochnet_v2.dynamic_classes.op_registry import simple_dense as dense  # TODO: ?
+# from stochnet_v2.dynamic_classes.op_registry import dense_relu as dense  # TODO: ?
+# from stochnet_v2.dynamic_classes.op_registry import bn_dense_relu as dense  # TODO: ?
+# from stochnet_v2.dynamic_classes.op_registry import relu_dense_bn as dense  # TODO: ?
 from stochnet_v2.dynamic_classes.util import expand_cell
 
 
@@ -28,14 +28,19 @@ def cell(
 
     with tf.compat.v1.variable_scope(f"{'expand' if expand else 'normal'}_cell_{cell_index}"):
 
+        prev_multiplier = 1
+        if expand_prev:
+            prev_multiplier *= expansion_multiplier
+        if expand:
+            prev_multiplier *= expansion_multiplier
+
+        curr_multiplier = expansion_multiplier if expand else 1
+
         with tf.variable_scope("state_0"):
-            if expand_prev:
-                s0 = dense(s0, expansion_multiplier)
-            else:
-                s0 = dense(s0, 1)
+            s0 = dense(s0, prev_multiplier)
 
         with tf.variable_scope("state_1"):
-            s1 = dense(s1, 1)
+            s1 = dense(s1, curr_multiplier)
 
         state = [s0, s1]
 
@@ -46,7 +51,8 @@ def cell(
             for j in range(2):
                 genotype_idx = 2 * i + j
                 input_state_idx = indices[genotype_idx]
-                expansion_coeff = expansion_multiplier if expand and input_state_idx < 2 else 1
+                # expansion_coeff = expansion_multiplier if expand and input_state_idx < 2 else 1
+                expansion_coeff = 1
 
                 s = state[input_state_idx]
                 if s != -1:

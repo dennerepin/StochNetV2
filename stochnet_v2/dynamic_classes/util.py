@@ -1,8 +1,8 @@
 import tensorflow as tf
 
 
-initializer = tf.initializers.glorot_normal
-# initializer = tf.compat.v1.initializers.variance_scaling(mode='fan_out', distribution="truncated_normal")
+# initializer = tf.initializers.glorot_normal
+initializer = tf.compat.v1.initializers.variance_scaling(mode='fan_out', distribution="truncated_normal")
 # initializer = None
 
 
@@ -37,7 +37,7 @@ def l1_regularizer(x, scale=0.01):
     return scale * tf.reduce_sum(tf.abs(x))
 
 
-def expand_identity(x, expansion_coeff):
+def _expand_identity(x, expansion_coeff):
     with tf.compat.v1.variable_scope('expansion_identity'):
         n_dims = x.shape.ndims
         x_shape = x.shape.as_list()
@@ -50,7 +50,7 @@ def expand_identity(x, expansion_coeff):
     return x
 
 
-def expand_element_wise(
+def _expand_element_wise(
         x,
         expansion_coeff,
         kernel_initializer=tf.compat.v1.initializers.glorot_normal,
@@ -61,7 +61,7 @@ def expand_element_wise(
     with tf.variable_scope("ElementWise"):
 
         if expansion_coeff > 1:
-            x = expand_identity(x, expansion_coeff)
+            x = _expand_identity(x, expansion_coeff)
 
         with tf.compat.v1.variable_scope("kernel"):
             kernel = tf.compat.v1.get_variable(
@@ -90,21 +90,20 @@ def expand_element_wise(
     return x
 
 
-def dense(x, expansion_coeff):
+def _simple_dense(x, expansion_coeff):
     n_units = x.shape.as_list()[-1] * expansion_coeff
     return tf.compat.v1.layers.Dense(n_units, kernel_initializer=initializer)(x)
 
 
-def relu_dense_bn(x, expansion_coeff):
+def _dense_relu(x, expansion_coeff):
     n_units = x.shape.as_list()[-1] * expansion_coeff
-    with tf.variable_scope("ReluDenseBN"):
-        x = tf.compat.v1.nn.relu(x)
+    with tf.variable_scope("DenseRelu"):
         x = tf.compat.v1.layers.Dense(n_units, kernel_initializer=initializer)(x)
-        x = tf.compat.v1.layers.BatchNormalization()(x)
+        x = tf.compat.v1.nn.relu(x)
     return x
 
 
-def bn_dense_relu(x, expansion_coeff):
+def _bn_dense_relu(x, expansion_coeff):
     n_units = x.shape.as_list()[-1] * expansion_coeff
     with tf.variable_scope("BNDenseRelu"):
         x = tf.compat.v1.layers.BatchNormalization()(x)
@@ -113,9 +112,10 @@ def bn_dense_relu(x, expansion_coeff):
     return x
 
 
-def dense_relu(x, expansion_coeff):
+def _relu_dense_bn(x, expansion_coeff):
     n_units = x.shape.as_list()[-1] * expansion_coeff
-    with tf.variable_scope("DenseRelu"):
-        x = tf.compat.v1.layers.Dense(n_units, kernel_initializer=initializer)(x)
+    with tf.variable_scope("ReluDenseBN"):
         x = tf.compat.v1.nn.relu(x)
+        x = tf.compat.v1.layers.Dense(n_units, kernel_initializer=initializer)(x)
+        x = tf.compat.v1.layers.BatchNormalization()(x)
     return x

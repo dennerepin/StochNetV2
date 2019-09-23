@@ -80,10 +80,10 @@ if __name__ == '__main__':
 python stochnet_v2/dataset/format_dataset.py \
        --project_folder='/home/dn/DATA/EGFR' \
        --timestep=0.5 \
-       --dataset_id=3 \
+       --dataset_id=4 \
        --nb_past_timesteps=1 \
-       --positivity=false \
+       --positivity=true \
        --test_fraction=0.2 \
        --save_format='hdf5' \
-       --random_seed=26
+       --random_seed=29
 """

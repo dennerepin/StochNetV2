@@ -3,10 +3,10 @@ import tensorflow as tf
 import tensorflow_probability as tfp
 
 from stochnet_v2.dynamic_classes.op_registry import OP_REGISTRY
-# from stochnet_v2.dynamic_classes.op_registry import simple_dense as dense  # TODO: ?
-from stochnet_v2.dynamic_classes.op_registry import rich_dense_0 as dense  # TODO: ?
-# from stochnet_v2.dynamic_classes.op_registry import rich_dense_1 as dense  # TODO: ?
-# from stochnet_v2.dynamic_classes.op_registry import rich_dense_2 as dense  # TODO: ?
+from stochnet_v2.dynamic_classes.op_registry import simple_dense as dense  # TODO: ?
+# from stochnet_v2.dynamic_classes.op_registry import dense_relu as dense  # TODO: ?
+# from stochnet_v2.dynamic_classes.op_registry import bn_dense_relu as dense  # TODO: ?
+# from stochnet_v2.dynamic_classes.op_registry import relu_dense_bn as dense  # TODO: ?
 from stochnet_v2.dynamic_classes.genotypes import Genotype
 from stochnet_v2.dynamic_classes.genotypes import PRIMITIVES
 from stochnet_v2.dynamic_classes.util import expand_cell
@@ -28,7 +28,9 @@ def mixed_op(x, expansion_coeff):
         )
 
         alphas = tf.nn.softmax(alphas)
-        alphas_reg_loss = - l2_regularizer(alphas, 0.01)
+        # reg_scale = float(len(PRIMITIVES))
+        reg_scale = 1.0
+        alphas_reg_loss = - l2_regularizer(alphas, reg_scale)
         tf.compat.v1.add_to_collection('architecture_regularization_losses', alphas_reg_loss)
 
     outputs = []
@@ -96,30 +98,35 @@ def cell(
 
     with tf.compat.v1.variable_scope(f"{'expand' if expand else 'normal'}_cell_{cell_index}"):
 
+        prev_multiplier = 1
+        if expand_prev:
+            prev_multiplier *= expansion_multiplier
+        if expand:
+            prev_multiplier *= expansion_multiplier
+
+        curr_multiplier = expansion_multiplier if expand else 1
+
         with tf.variable_scope("state_0"):
-            if expand_prev:
-                s0 = dense(s0, expansion_multiplier)
-            else:
-                s0 = dense(s0, 1)
+            s0 = dense(s0, prev_multiplier)
 
         with tf.variable_scope("state_1"):
-            s1 = dense(s1, 1)
+            s1 = dense(s1, curr_multiplier)
 
         state = [s0, s1]
 
         for i in range(cell_size):
             tmp = []
             for j in range(i + 2):
-                expansion_coeff = expansion_multiplier if expand and j < 2 else 1
+                # expansion_coeff = expansion_multiplier if expand and j < 2 else 1
+                expansion_coeff = 1
                 with tf.compat.v1.variable_scope(f"mixed_op_{j}_{i + 2}"):
-                    mix = mixed_op(state[j], expansion_coeff)
+                    mix = mixed_op_cat(state[j], expansion_coeff)
                 tmp.append(mix)
 
             with tf.variable_scope(f"state_{i + 2}"):
                 new_state = tf.add_n(tmp)
             state.append(new_state)
 
-        # out = state[-1]
         out = tf.compat.v1.add_n(state[-n_summ_states:])
 
     return out
@@ -173,7 +180,18 @@ def get_genotypes(session, n_cells, cell_size, n_summ_states):
                 print(f"\t{alpha_name}: {alpha_value}")
 
                 alpha_value_argsort = alpha_value.argsort()
-                max_index = alpha_value_argsort[-1]
+
+                # TODO: if we keep zero-connections as candidates, we may obtain much smaller graphs,
+                # as it removes a some of connections. BUT when more than one zero-connections
+                # have large scores they can dominate all other candidate edges which results
+                # in no connection to the state from any another
+
+                # max_index = alpha_value_argsort[-1]
+                max_index = \
+                    alpha_value_argsort[-1] \
+                    if alpha_value_argsort[-1] != PRIMITIVES.index('none') \
+                    else alpha_value_argsort[-2]
+
                 edge_candidate = PRIMITIVES[max_index]
                 edge_score = alpha_value[max_index]
                 print(f"\t{j}-th state via {edge_candidate.upper()}"
@@ -185,10 +203,7 @@ def get_genotypes(session, n_cells, cell_size, n_summ_states):
             print(f"edges_scores = {edges_scores}")
 
             edges_scores_argsort = np.argsort(edges_scores)[::-1]  # decreasing order
-            edges_sorted = [
-                edges[i]
-                for i in edges_scores_argsort
-            ]
+            edges_sorted = [edges[i] for i in edges_scores_argsort]
             max_edges = edges_sorted[:2]
 
             print(f"max_edges = {max_edges}\n")

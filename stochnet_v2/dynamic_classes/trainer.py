@@ -203,7 +203,7 @@ class Trainer:
                 ]
 
                 training_state_arch = [
-                    session.run(train_operations_main.learning_rate),  # learning_rate
+                    session.run(train_operations_arch.learning_rate),  # learning_rate
                     0,                                                 # decay_step
                     0,                                                 # tolerance_step
                     0,                                                 # nans_step_counter
@@ -269,13 +269,15 @@ class Trainer:
                         )
 
                         variables = train_operations_arch.train_variables
-                        for v in variables:
+                        arch_loss = tf.compat.v1.get_collection('architecture_regularization_losses')
+                        arch_loss_vals = session.run(arch_loss)
+                        for i, v in enumerate(variables):
                             v_softmax_name = v.name.replace('alphas:0', 'Softmax:0')
                             v_val, v_softmax_val = session.run([v, v_softmax_name])
                             print(
                                 f"{v.name} \n"
                                 f"\t{v_val} -> \n"
-                                f"\t{v_softmax_val} \n"
+                                f"\t{v_softmax_val}, reg_loss={arch_loss_vals[i]} \n"
                             )
 
                     epoch += train_epochs_main
@@ -429,16 +431,16 @@ class Trainer:
             learning_strategy_main,
             learning_strategy_arch,
     ):
-        trainable_graph = tf.compat.v1.Graph()
-        copy_graph(model.graph, trainable_graph)
-        model_input = get_transformed_tensor(model.input_placeholder, trainable_graph)
-        rv_output = get_transformed_tensor(model.rv_output_ph, trainable_graph)
-        model_loss = get_transformed_tensor(model.loss, trainable_graph)
+        # trainable_graph = tf.compat.v1.Graph()
+        # copy_graph(model.graph, trainable_graph)
+        # model_input = get_transformed_tensor(model.input_placeholder, trainable_graph)
+        # rv_output = get_transformed_tensor(model.rv_output_ph, trainable_graph)
+        # model_loss = get_transformed_tensor(model.loss, trainable_graph)
 
-        # trainable_graph = model.graph
-        # model_input = model.input_placeholder
-        # rv_output = model.rv_output_ph
-        # model_loss = model.loss
+        trainable_graph = model.graph
+        model_input = model.input_placeholder
+        rv_output = model.rv_output_ph
+        model_loss = model.loss
 
         with trainable_graph.as_default():
 
@@ -498,7 +500,7 @@ class Trainer:
                 loss_arch = model_loss + _REG_LOSS_WEIGHT * reg_loss_arch
             else:
                 loss_arch = model_loss
-
+            print(f" ==== learning_strategy_arch.initial_lr: {learning_strategy_arch.initial_lr}")
             learning_rate_arch = tf.compat.v1.placeholder_with_default(
                 learning_strategy_arch.initial_lr,
                 shape=[],
@@ -540,16 +542,16 @@ class Trainer:
             model,
             learning_strategy,
     ):
-        trainable_graph = tf.compat.v1.Graph()
-        copy_graph(model.graph, trainable_graph)
-        model_input = get_transformed_tensor(model.input_placeholder, trainable_graph)
-        rv_output = get_transformed_tensor(model.rv_output_ph, trainable_graph)
-        model_loss = get_transformed_tensor(model.loss, trainable_graph)
+        # trainable_graph = tf.compat.v1.Graph()
+        # copy_graph(model.graph, trainable_graph)
+        # model_input = get_transformed_tensor(model.input_placeholder, trainable_graph)
+        # rv_output = get_transformed_tensor(model.rv_output_ph, trainable_graph)
+        # model_loss = get_transformed_tensor(model.loss, trainable_graph)
 
-        # trainable_graph = model.graph
-        # model_input = model.input_placeholder
-        # rv_output = model.rv_output_ph
-        # model_loss = model.loss
+        trainable_graph = model.graph
+        model_input = model.input_placeholder
+        rv_output = model.rv_output_ph
+        model_loss = model.loss
 
         with trainable_graph.as_default():
 
