@@ -164,7 +164,7 @@ class CategoricalOutputLayer(RandomVariableOutputLayer):
         self.hidden_size = hidden_size
         self._activation_fn = activation
         self._coeff_regularizer = coeff_regularizer
-        # self._coeff_regularizer = tf.keras.regularizers.l2(0.1)
+        # self._coeff_regularizer = tf.keras.regularizers.l2(0.001)
 
         self._layer_params = {
             'kernel_constraint': kernel_constraint,
@@ -172,7 +172,7 @@ class CategoricalOutputLayer(RandomVariableOutputLayer):
             'bias_constraint': bias_constraint,
             'bias_regularizer': bias_regularizer,
             # 'activity_regularizer': coeff_regularizer,
-            'kernel_initializer': initializer,  # TODO
+            'kernel_initializer': initializer,
         }
 
     @property
@@ -263,7 +263,7 @@ class MultivariateNormalDiagOutputLayer(RandomVariableOutputLayer):
             'bias_constraint': bias_constraint,
             'bias_regularizer': bias_regularizer,
             # 'activity_regularizer': mu_regularizer,
-            'kernel_initializer': initializer,  # TODO
+            'kernel_initializer': initializer,
         }
         self._diag_layer_params = {
             'kernel_constraint': kernel_constraint,
@@ -271,7 +271,7 @@ class MultivariateNormalDiagOutputLayer(RandomVariableOutputLayer):
             'bias_constraint': bias_constraint,
             'bias_regularizer': bias_regularizer,
             # 'activity_regularizer': diag_regularizer,
-            'kernel_initializer': initializer,  # TODO
+            'kernel_initializer': initializer,
         }
 
     @property
@@ -401,7 +401,7 @@ class MultivariateNormalTriLOutputLayer(RandomVariableOutputLayer):
             'bias_constraint': bias_constraint,
             'bias_regularizer': bias_regularizer,
             # 'activity_regularizer': mu_regularizer,
-            'kernel_initializer': initializer,  # TODO
+            'kernel_initializer': initializer,
         }
         self._diag_layer_params = {
             'kernel_constraint': kernel_constraint,
@@ -409,7 +409,7 @@ class MultivariateNormalTriLOutputLayer(RandomVariableOutputLayer):
             'bias_constraint': bias_constraint,
             'bias_regularizer': bias_regularizer,
             # 'activity_regularizer': diag_regularizer,
-            'kernel_initializer': initializer,  # TODO
+            'kernel_initializer': initializer,
         }
         self._sub_diag_layer_params = {
             'kernel_constraint': kernel_constraint,
@@ -417,7 +417,7 @@ class MultivariateNormalTriLOutputLayer(RandomVariableOutputLayer):
             'bias_constraint': bias_constraint,
             'bias_regularizer': bias_regularizer,
             # 'activity_regularizer': sub_diag_regularizer,
-            'kernel_initializer': initializer,  # TODO
+            'kernel_initializer': initializer,
         }
 
     @property

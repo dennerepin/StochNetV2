@@ -66,9 +66,9 @@ CONSTRAINTS_REGISTRY['minmaxnorm'] = tf.keras.constraints.MinMaxNorm(0., 3.)
 CONSTRAINTS_REGISTRY['unitnorm'] = tf.keras.constraints.UnitNorm()
 CONSTRAINTS_REGISTRY['none'] = None
 
-REGULARIZERS_REGISTRY['l1'] = tf.keras.regularizers.l1(0.01)
-REGULARIZERS_REGISTRY['l2'] = tf.keras.regularizers.l2(0.01)
-REGULARIZERS_REGISTRY['l1_l2'] = tf.keras.regularizers.l1_l2(0.01, 0.01)
+REGULARIZERS_REGISTRY['l1'] = tf.keras.regularizers.l1(0.001)
+REGULARIZERS_REGISTRY['l2'] = tf.keras.regularizers.l2(0.001)
+REGULARIZERS_REGISTRY['l1_l2'] = tf.keras.regularizers.l1_l2(0.001, 0.001)
 REGULARIZERS_REGISTRY['none'] = None
 
 ACTIVATIONS_REGISTRY['relu'] = tf.compat.v1.nn.relu
