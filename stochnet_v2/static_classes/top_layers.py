@@ -11,6 +11,7 @@ from stochnet_v2.static_classes.random_variables import Mixture
 from stochnet_v2.utils.errors import ShapeError
 from stochnet_v2.utils.errors import DimensionError
 from stochnet_v2.utils.registry import Registry
+from stochnet_v2.utils.util import apply_regularization
 
 tfd = tfp.distributions
 Dense = tf.compat.v1.layers.Dense
@@ -164,7 +165,8 @@ class CategoricalOutputLayer(RandomVariableOutputLayer):
         self.hidden_size = hidden_size
         self._activation_fn = activation
         self._coeff_regularizer = coeff_regularizer
-        # self._coeff_regularizer = tf.keras.regularizers.l2(0.001)
+        # self._coeff_regularizer = tf.keras.regularizers.l2(0.01)
+        # self._coeff_regularizer = lambda x: 0.001 * tf.compat.v1.nn.l2_loss(x)
 
         self._layer_params = {
             'kernel_constraint': kernel_constraint,
@@ -210,10 +212,13 @@ class CategoricalOutputLayer(RandomVariableOutputLayer):
                 self.number_of_output_neurons,
                 activation=None,
                 name='logits',
-                activity_regularizer=self._coeff_regularizer,
+                # activity_regularizer=self._coeff_regularizer,
                 **self._layer_params
             )(base)
-            
+
+            if self._coeff_regularizer:
+                apply_regularization(self._coeff_regularizer, logits)
+
             # TODO: try clipping?
 
             return logits
@@ -324,7 +329,7 @@ class MultivariateNormalDiagOutputLayer(RandomVariableOutputLayer):
                     self._sample_space_dimension,
                     activation=None,
                     name='mu',
-                    activity_regularizer=self._mu_regularizer,
+                    # activity_regularizer=self._mu_regularizer,
                     **self._mu_layer_params,
                 )(mu)
 
@@ -332,9 +337,15 @@ class MultivariateNormalDiagOutputLayer(RandomVariableOutputLayer):
                     self._sample_space_dimension,
                     activation=nn_elu_activation,  # or softplus_activation TODO
                     name='diag',
-                    activity_regularizer=self._diag_regularizer,
+                    # activity_regularizer=self._diag_regularizer,
                     **self._diag_layer_params,
                 )(diag)
+
+                if self._mu_regularizer:
+                    apply_regularization(self._mu_regularizer, mu)
+
+                if self._diag_regularizer:
+                    apply_regularization(self._diag_regularizer, diag)
 
                 diag = tf.clip_by_value(diag, _EPS, np.inf)  # TODO
 
@@ -362,6 +373,7 @@ class MultivariateNormalDiagOutputLayer(RandomVariableOutputLayer):
     def loss_function(self, y_true, y_pred):
         loss = - self.log_likelihood(y_true, y_pred)
         loss = tf.math.reduce_mean(loss)
+        # loss = tf.reshape(loss, [-1])
         return loss
 
     def log_likelihood(self, y_true, y_pred):
@@ -479,7 +491,7 @@ class MultivariateNormalTriLOutputLayer(RandomVariableOutputLayer):
                     self._sample_space_dimension,
                     activation=None,
                     name='mu',
-                    activity_regularizer=self._mu_regularizer,
+                    # activity_regularizer=self._mu_regularizer,
                     **self._mu_layer_params,
                 )(mu)
 
@@ -487,19 +499,28 @@ class MultivariateNormalTriLOutputLayer(RandomVariableOutputLayer):
                     self._sample_space_dimension,
                     activation=nn_elu_activation,   # or softplus_activation TODO
                     name='diag',
-                    activity_regularizer=self._diag_regularizer,
+                    # activity_regularizer=self._diag_regularizer,
                     **self._diag_layer_params,
                 )(diag)
-
-                diag = tf.clip_by_value(diag, _EPS, np.inf)  # TODO
 
                 sub_diag = Dense(
                     self._number_of_sub_diag_entries,
                     activation=None,
                     name='sub_diag',
-                    activity_regularizer=self._sub_diag_regularizer,
+                    # activity_regularizer=self._sub_diag_regularizer,
                     **self._sub_diag_layer_params,
                 )(sub_diag)
+
+                if self._mu_regularizer:
+                    apply_regularization(self._mu_regularizer, mu)
+
+                if self._diag_regularizer:
+                    apply_regularization(self._diag_regularizer, diag)
+
+                if self._sub_diag_regularizer:
+                    apply_regularization(self._sub_diag_regularizer, sub_diag)
+
+                diag = tf.clip_by_value(diag, _EPS, np.inf)  # TODO
 
                 return tf.concat([mu, diag, sub_diag], axis=-1)
 
@@ -542,6 +563,7 @@ class MultivariateNormalTriLOutputLayer(RandomVariableOutputLayer):
     def loss_function(self, y_true, y_pred):
         loss = - self.log_likelihood(y_true, y_pred)
         loss = tf.math.reduce_mean(loss)
+        # loss = tf.reshape(loss, [-1])
         return loss
 
     def log_likelihood(self, y_true, y_pred):
@@ -601,9 +623,9 @@ class MixtureOutputLayer(RandomVariableOutputLayer):
             self._number_of_output_neurons += component.number_of_output_neurons
 
     def add_layer_on_top(self, base):
-        # return self._add_layer_on_top_share(base)
+        return self._add_layer_on_top_share(base)
         # return self._add_layer_on_top_individual(base)
-        return self._add_layer_on_top_individual_cat(base)
+        # return self._add_layer_on_top_individual_cat(base)
 
     def _add_layer_on_top_share(self, base):
         # all components onto the same base
@@ -658,7 +680,7 @@ class MixtureOutputLayer(RandomVariableOutputLayer):
         # separate slice for categorical, shared for other
         slice_dim = base.shape.as_list()[-1]
         n_slices = len(self.components) + 1
-        cat_slice_size = slice_dim // n_slices * 2
+        cat_slice_size = slice_dim // n_slices  # * 2
 
         print("Mixture components share nn outputs and categorical has individual slice")
         print(f'base shape: {base.shape.as_list()}')
@@ -723,6 +745,7 @@ class MixtureOutputLayer(RandomVariableOutputLayer):
     def loss_function(self, y_true, y_pred):
         loss = - self.log_likelihood(y_true, y_pred)
         loss = tf.math.reduce_mean(loss)
+        # loss = tf.reshape(loss, [-1])
         return loss
 
     def log_likelihood(self, y_true, y_pred):
