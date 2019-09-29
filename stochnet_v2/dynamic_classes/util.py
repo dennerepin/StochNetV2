@@ -1,8 +1,8 @@
 import tensorflow as tf
+from stochnet_v2.utils.util import apply_regularization
 
-
-# initializer = tf.initializers.glorot_normal
-initializer = tf.compat.v1.initializers.variance_scaling(mode='fan_out', distribution="truncated_normal")
+initializer = tf.initializers.glorot_normal
+# initializer = tf.compat.v1.initializers.variance_scaling(mode='fan_out', distribution="truncated_normal")
 # initializer = None
 
 
@@ -37,7 +37,7 @@ def l1_regularizer(x, scale=0.01):
     return scale * tf.reduce_sum(tf.abs(x))
 
 
-def _expand_identity(x, expansion_coeff):
+def _expand_identity(x, expansion_coeff, **kwargs):
     with tf.compat.v1.variable_scope('expansion_identity'):
         n_dims = x.shape.ndims
         x_shape = x.shape.as_list()
@@ -53,10 +53,14 @@ def _expand_identity(x, expansion_coeff):
 def _expand_element_wise(
         x,
         expansion_coeff,
-        kernel_initializer=tf.compat.v1.initializers.glorot_normal,
-        kernel_regularizer=l2_regularizer,
+        kernel_initializer=initializer,
+        kernel_constraint=None,
+        kernel_regularizer=None,
         bias_initializer=tf.compat.v1.initializers.zeros,
-        bias_regularizer=l2_regularizer,
+        bias_constraint=None,
+        bias_regularizer=None,
+        activity_regularizer=None,
+        **kwargs,
 ):
     with tf.variable_scope("ElementWise"):
 
@@ -68,54 +72,143 @@ def _expand_element_wise(
                 name=f"kernel",
                 shape=[1] + x.shape.as_list()[1:],
                 initializer=kernel_initializer,
+                constraint=kernel_constraint,
+                regularizer=kernel_regularizer,
                 trainable=True,
             )
-            if kernel_regularizer:
-                kernel_reg_loss = kernel_regularizer(kernel)
-                tf.compat.v1.add_to_collection(tf.compat.v1.GraphKeys.REGULARIZATION_LOSSES, kernel_reg_loss)
 
         with tf.compat.v1.variable_scope("bias"):
             bias = tf.compat.v1.get_variable(
                 name=f"bias",
                 shape=x.shape.as_list()[-1],
                 initializer=bias_initializer,
+                constraint=bias_constraint,
+                regularizer=bias_regularizer,
                 trainable=True,
             )
-            if bias_regularizer:
-                bias_reg_loss = l2_regularizer(bias)
-                tf.compat.v1.add_to_collection(tf.compat.v1.GraphKeys.REGULARIZATION_LOSSES, bias_reg_loss)
 
         x = tf.compat.v1.multiply(x, kernel) + bias
+        if activity_regularizer:
+            apply_regularization(activity_regularizer, x)
 
     return x
 
 
-def _simple_dense(x, expansion_coeff):
+def _simple_dense(
+        x,
+        expansion_coeff,
+        kernel_initializer=initializer,
+        kernel_constraint=None,
+        kernel_regularizer=None,
+        bias_initializer=tf.compat.v1.initializers.zeros,
+        bias_constraint=None,
+        bias_regularizer=None,
+        activity_regularizer=None,
+        **kwargs,
+):
     n_units = x.shape.as_list()[-1] * expansion_coeff
-    return tf.compat.v1.layers.Dense(n_units, kernel_initializer=initializer)(x)
+    x = tf.compat.v1.layers.Dense(
+        n_units,
+        kernel_initializer=kernel_initializer,
+        kernel_constraint=kernel_constraint,
+        kernel_regularizer=kernel_regularizer,
+        bias_initializer=bias_initializer,
+        bias_constraint=bias_constraint,
+        bias_regularizer=bias_regularizer,
+    )(x)
+    if activity_regularizer:
+        apply_regularization(activity_regularizer, x)
+
+    return x
 
 
-def _dense_relu(x, expansion_coeff):
+def _dense_relu(
+        x,
+        expansion_coeff,
+        kernel_initializer=initializer,
+        kernel_constraint=None,
+        kernel_regularizer=None,
+        bias_initializer=tf.compat.v1.initializers.zeros,
+        bias_constraint=None,
+        bias_regularizer=None,
+        activity_regularizer=None,
+        **kwargs,
+):
     n_units = x.shape.as_list()[-1] * expansion_coeff
     with tf.variable_scope("DenseRelu"):
-        x = tf.compat.v1.layers.Dense(n_units, kernel_initializer=initializer)(x)
+        x = tf.compat.v1.layers.Dense(
+            n_units,
+            kernel_initializer=kernel_initializer,
+            kernel_constraint=kernel_constraint,
+            kernel_regularizer=kernel_regularizer,
+            bias_initializer=bias_initializer,
+            bias_constraint=bias_constraint,
+            bias_regularizer=bias_regularizer,
+        )(x)
+        if activity_regularizer:
+            apply_regularization(activity_regularizer, x)
+
         x = tf.compat.v1.nn.relu(x)
     return x
 
 
-def _bn_dense_relu(x, expansion_coeff):
+def _bn_dense_relu(
+        x,
+        expansion_coeff,
+        kernel_initializer=initializer,
+        kernel_constraint=None,
+        kernel_regularizer=None,
+        bias_initializer=tf.compat.v1.initializers.zeros,
+        bias_constraint=None,
+        bias_regularizer=None,
+        activity_regularizer=None,
+        **kwargs,
+):
     n_units = x.shape.as_list()[-1] * expansion_coeff
     with tf.variable_scope("BNDenseRelu"):
         x = tf.compat.v1.layers.BatchNormalization()(x)
-        x = tf.compat.v1.layers.Dense(n_units, kernel_initializer=initializer)(x)
+        x = tf.compat.v1.layers.Dense(
+            n_units,
+            kernel_initializer=kernel_initializer,
+            kernel_constraint=kernel_constraint,
+            kernel_regularizer=kernel_regularizer,
+            bias_initializer=bias_initializer,
+            bias_constraint=bias_constraint,
+            bias_regularizer=bias_regularizer,
+        )(x)
+        if activity_regularizer:
+            apply_regularization(activity_regularizer, x)
+
         x = tf.compat.v1.nn.relu(x)
     return x
 
 
-def _relu_dense_bn(x, expansion_coeff):
+def _relu_dense_bn(
+        x,
+        expansion_coeff,
+        kernel_initializer=initializer,
+        kernel_constraint=None,
+        kernel_regularizer=None,
+        bias_initializer=tf.compat.v1.initializers.zeros,
+        bias_constraint=None,
+        bias_regularizer=None,
+        activity_regularizer=None,
+        **kwargs,
+):
     n_units = x.shape.as_list()[-1] * expansion_coeff
     with tf.variable_scope("ReluDenseBN"):
         x = tf.compat.v1.nn.relu(x)
-        x = tf.compat.v1.layers.Dense(n_units, kernel_initializer=initializer)(x)
+        x = tf.compat.v1.layers.Dense(
+            n_units,
+            kernel_initializer=kernel_initializer,
+            kernel_constraint=kernel_constraint,
+            kernel_regularizer=kernel_regularizer,
+            bias_initializer=bias_initializer,
+            bias_constraint=bias_constraint,
+            bias_regularizer=bias_regularizer,
+        )(x)
+        if activity_regularizer:
+            apply_regularization(activity_regularizer, x)
+
         x = tf.compat.v1.layers.BatchNormalization()(x)
     return x

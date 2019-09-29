@@ -9,7 +9,8 @@ from stochnet_v2.static_classes.model import StochNet
 from stochnet_v2.dynamic_classes import nn_body_search
 from stochnet_v2.dynamic_classes import nn_body
 from stochnet_v2.dynamic_classes.nn_body_search import get_genotypes
-
+from stochnet_v2.utils.registry import CONSTRAINTS_REGISTRY
+from stochnet_v2.utils.registry import REGULARIZERS_REGISTRY
 LOGGER = logging.getLogger('dynamic_classes.model')
 
 
@@ -33,6 +34,22 @@ class NASStochNet(StochNet):
         self.expansion_multiplier = body_config['expansion_multiplier']
         self.cell_size = body_config['cell_size']
         self.n_summ_states = body_config['n_summ_states']
+
+        kernel_constraint = body_config.pop("kernel_constraint", "none")
+        body_config["kernel_constraint"] = CONSTRAINTS_REGISTRY[kernel_constraint]
+
+        kernel_regularizer = body_config.pop("kernel_regularizer", "none")
+        body_config["kernel_regularizer"] = REGULARIZERS_REGISTRY[kernel_regularizer]
+
+        bias_constraint = body_config.pop("bias_constraint", "none")
+        body_config["bias_constraint"] = CONSTRAINTS_REGISTRY[bias_constraint]
+
+        bias_regularizer = body_config.pop("bias_regularizer", "none")
+        body_config["bias_regularizer"] = REGULARIZERS_REGISTRY[bias_regularizer]
+
+        activity_regularizer = body_config.pop("activity_regularizer", "none")
+        body_config["activity_regularizer"] = REGULARIZERS_REGISTRY[activity_regularizer]
+
         return partial(_body_search, **body_config)
 
     def save_genotypes(self, n_cells=None, cell_size=None, n_summ_states=None):

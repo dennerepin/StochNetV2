@@ -22,6 +22,7 @@ TrainOperations = namedtuple(
         'global_step',
         'train_variables',
         'optimizer_variables',
+        'gradients_'
     ],
 )
 
@@ -477,18 +478,22 @@ class Trainer:
                 var_list=main_vars
             )
 
-            gradients_main = optimizer_main.apply_gradients(
+            # TODO: gradient clipping
+            # gradients_main = [(tf.clip_by_value(grad, -1.0, 1.0), var) for grad, var in gradients_main]
+
+            apply_gradients_main = optimizer_main.apply_gradients(
                 gradients_main,
                 global_step_main,
             )
 
             train_operations_main = TrainOperations(
-                gradients_main,
+                apply_gradients_main,
                 learning_rate_main,
                 loss_main,
                 global_step_main,
                 main_vars,
                 optimizer_main.variables(),
+                gradients_main,
             )
 
             # ARCHITECTURE:
@@ -500,7 +505,6 @@ class Trainer:
                 loss_arch = model_loss + _REG_LOSS_WEIGHT * reg_loss_arch
             else:
                 loss_arch = model_loss
-            print(f" ==== learning_strategy_arch.initial_lr: {learning_strategy_arch.initial_lr}")
             learning_rate_arch = tf.compat.v1.placeholder_with_default(
                 learning_strategy_arch.initial_lr,
                 shape=[],
@@ -519,17 +523,18 @@ class Trainer:
                 loss_arch,
                 var_list=arch_vars
             )
-            gradients_arch = optimizer_arch.apply_gradients(
+            apply_gradients_arch = optimizer_arch.apply_gradients(
                 gradients_arch,
                 global_step_arch,
             )
             train_operations_arch = TrainOperations(
-                gradients_arch,
+                apply_gradients_arch,
                 learning_rate_arch,
                 loss_arch,
                 global_step_arch,
                 arch_vars,
                 optimizer_arch.variables(),
+                gradients_arch,
             )
 
             train_input_x = model_input
@@ -579,18 +584,19 @@ class Trainer:
                 raise NotImplementedError(f'optimizer "{optimizer_type}" is not supported')
 
             gradients = optimizer.compute_gradients(loss, var_list=trainable_vars)
-            gradients = optimizer.apply_gradients(
+            apply_gradients = optimizer.apply_gradients(
                 gradients,
                 global_step,
             )
 
             train_operations = TrainOperations(
-                gradients,
+                apply_gradients,
                 learning_rate,
                 loss,
                 global_step,
                 trainable_vars,
                 optimizer.variables(),
+                gradients,
             )
             train_input_x = model_input
             train_input_y = rv_output
@@ -809,6 +815,41 @@ class Trainer:
 
             for X_train, Y_train in train_dataset:
 
+                # # TODO: TMP
+                # diag1, diag2, diag3, diag4 = session.run(
+                #     ['MixtureOutputLayer/MultivariateNormalDiagOutputLayer/diag/Add:0',
+                #      'MixtureOutputLayer/MultivariateNormalDiagOutputLayer_1/diag/Add:0',
+                #      'MixtureOutputLayer/MultivariateNormalTriLOutputLayer/diag/Add:0',
+                #      'MixtureOutputLayer/MultivariateNormalTriLOutputLayer_1/diag/Add:0'],
+                #     # ['MixtureOutputLayer/MultivariateNormalDiagOutputLayer/diag/Softplus:0',
+                #     #  'MixtureOutputLayer/MultivariateNormalDiagOutputLayer_1/diag/Softplus:0',
+                #     #  'MixtureOutputLayer/MultivariateNormalTriLOutputLayer/diag/Softplus:0',
+                #     #  'MixtureOutputLayer/MultivariateNormalTriLOutputLayer_1/diag/Softplus:0'],
+                #     feed_dict={
+                #         train_input_x: X_train,
+                #         train_input_y: Y_train,
+                #     })
+                # grads, loss = session.run(
+                #     [train_operations.gradients_, train_operations.loss],
+                #     feed_dict={
+                #         train_input_x: X_train,
+                #         train_input_y: Y_train,
+                #     })
+                # print(("*" * 100 + "\n") * 10)
+                # print(f"diag1: {np.min(diag1)}, {np.max(diag1)}")
+                # print(f"diag2: {np.min(diag2)}, {np.max(diag2)}")
+                # print(f"diag3: {np.min(diag3)}, {np.max(diag3)}")
+                # print(f"diag4: {np.min(diag4)}, {np.max(diag4)}")
+                # print(f"loss: {loss}")
+                # print()
+                # d = {}
+                # for grad, grad_val in zip(train_operations.gradients_, grads):
+                #     d[grad[1].name.replace(':0', '')] = grad_val[0]
+                # sorted_keys = sorted(d.keys())
+                # for key in sorted_keys:
+                #     print(f"{key}: {np.max(d[key]):.3f}, {np.min(d[key]):.3f}")
+                # # TODO: END OF TMP
+
                 result = _run_train_step(
                     train_operations=train_operations,
                     X=X_train,
@@ -819,8 +860,13 @@ class Trainer:
                 )
                 global_step = result['global_step']
 
+                # # TODO: TMP
+                # print(f"loss after step: {result['loss']}")
+                # # TODO: END OF TMP
+
                 # HANDLE NAN VALUES
                 if np.isnan(result['loss']):
+                    # return ''  # TODO: TMP
                     nans_step_counter = _handle_nans(nans_step_counter, global_step)
                     continue
 

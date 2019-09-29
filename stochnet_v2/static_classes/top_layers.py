@@ -15,11 +15,15 @@ from stochnet_v2.utils.util import apply_regularization
 
 tfd = tfp.distributions
 Dense = tf.compat.v1.layers.Dense
-# initializer = tf.initializers.glorot_normal
-initializer = tf.compat.v1.initializers.variance_scaling(mode='fan_out', distribution="truncated_normal")
+initializer = tf.initializers.glorot_normal
+# initializer = tf.compat.v1.initializers.variance_scaling(mode='fan_out', distribution="truncated_normal")
 # initializer = None
 
-_EPS = 0.01
+_DIAG_MIN = 0.01
+# _EPS = 1e-3
+# _MAX = np.inf
+_DIAG_MAX = 1.0
+_SUB_DIAG_MAX = 1.0
 
 
 MIXTURE_COMPONENTS_REGISTRY = Registry(name='MixtureComponentsDescriptionsRegistry')
@@ -347,7 +351,7 @@ class MultivariateNormalDiagOutputLayer(RandomVariableOutputLayer):
                 if self._diag_regularizer:
                     apply_regularization(self._diag_regularizer, diag)
 
-                diag = tf.clip_by_value(diag, _EPS, np.inf)  # TODO
+                diag = tf.compat.v1.clip_by_value(diag, _DIAG_MIN, _DIAG_MAX)  # TODO
 
                 return tf.concat([mu, diag], axis=-1)
 
@@ -520,7 +524,8 @@ class MultivariateNormalTriLOutputLayer(RandomVariableOutputLayer):
                 if self._sub_diag_regularizer:
                     apply_regularization(self._sub_diag_regularizer, sub_diag)
 
-                diag = tf.clip_by_value(diag, _EPS, np.inf)  # TODO
+                diag = tf.compat.v1.clip_by_value(diag, _DIAG_MIN, _DIAG_MAX)  # TODO
+                sub_diag = tf.compat.v1.clip_by_value(sub_diag, -_SUB_DIAG_MAX, _SUB_DIAG_MAX)  # TODO
 
                 return tf.concat([mu, diag, sub_diag], axis=-1)
 

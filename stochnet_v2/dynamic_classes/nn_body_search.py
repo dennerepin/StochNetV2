@@ -17,7 +17,7 @@ from stochnet_v2.dynamic_classes.util import l2_regularizer
 tfd = tfp.distributions
 
 
-def mixed_op(x, expansion_coeff):
+def mixed_op(x, expansion_coeff, **kwargs):
 
     with tf.compat.v1.variable_scope("architecture_variables"):
         alphas = tf.compat.v1.get_variable(
@@ -28,14 +28,12 @@ def mixed_op(x, expansion_coeff):
         )
 
         alphas = tf.nn.softmax(alphas)
-        # reg_scale = float(len(PRIMITIVES))
-        reg_scale = 1.0
-        alphas_reg_loss = - l2_regularizer(alphas, reg_scale)
+        alphas_reg_loss = - l2_regularizer(alphas, 1.0)
         tf.compat.v1.add_to_collection('architecture_regularization_losses', alphas_reg_loss)
 
     outputs = []
     for idx, primitive in enumerate(PRIMITIVES):
-        out = OP_REGISTRY[primitive](x, expansion_coeff)
+        out = OP_REGISTRY[primitive](x, expansion_coeff, **kwargs)
         alpha = alphas[idx]
         outputs.append(alpha * out)
 
@@ -56,7 +54,7 @@ def cat_onehot(a):
     return one_hot, grad
 
 
-def mixed_op_cat(x, expansion_coeff):
+def mixed_op_cat(x, expansion_coeff, **kwargs):
 
     with tf.compat.v1.variable_scope("architecture_variables"):
         alphas = tf.compat.v1.get_variable(
@@ -72,7 +70,7 @@ def mixed_op_cat(x, expansion_coeff):
 
     outputs = []
     for idx, primitive in enumerate(PRIMITIVES):
-        tmp = OP_REGISTRY[primitive](x, expansion_coeff)
+        tmp = OP_REGISTRY[primitive](x, expansion_coeff, **kwargs)
         outputs.append(tmp)
 
     out = tf.compat.v1.stack(outputs, axis=0)
@@ -94,6 +92,7 @@ def cell(
         expansion_multiplier,
         cell_index,
         n_summ_states=2,
+        **kwargs,
 ):
 
     with tf.compat.v1.variable_scope(f"{'expand' if expand else 'normal'}_cell_{cell_index}"):
@@ -120,7 +119,7 @@ def cell(
                 # expansion_coeff = expansion_multiplier if expand and j < 2 else 1
                 expansion_coeff = 1
                 with tf.compat.v1.variable_scope(f"mixed_op_{j}_{i + 2}"):
-                    mix = mixed_op_cat(state[j], expansion_coeff)
+                    mix = mixed_op_cat(state[j], expansion_coeff, **kwargs)
                 tmp.append(mix)
 
             with tf.variable_scope(f"state_{i + 2}"):
@@ -132,7 +131,14 @@ def cell(
     return out
 
 
-def body(x, n_cells=4, cell_size=4, expansion_multiplier=4, n_summ_states=2):
+def body(
+        x,
+        n_cells=4,
+        cell_size=4,
+        expansion_multiplier=4,
+        n_summ_states=2,
+        **kwargs
+):
     # out_dim = x.shape.as_list()[-1]
     # s0 = tf.compat.v1.layers.Dense(out_dim, activation='relu')(x)
     # s1 = tf.compat.v1.layers.Dense(out_dim, activation='relu')(x)
@@ -142,13 +148,28 @@ def body(x, n_cells=4, cell_size=4, expansion_multiplier=4, n_summ_states=2):
 
     for n in range(n_cells):
         expand = expand_cell(n, n_cells)
-        s0, s1 = s1, cell(s0, s1, cell_size, expand, expand_prev, expansion_multiplier, n, n_summ_states)
+        s0, s1 = s1, cell(
+            s0,
+            s1,
+            cell_size=cell_size,
+            expand=expand,
+            expand_prev=expand_prev,
+            expansion_multiplier=expansion_multiplier,
+            cell_index=n,
+            n_summ_states=n_summ_states,
+            **kwargs
+        )
         expand_prev = expand
 
     return s1
 
 
-def get_genotypes(session, n_cells, cell_size, n_summ_states):
+def get_genotypes(
+        session,
+        n_cells,
+        cell_size,
+        n_summ_states
+):
 
     def _parse(_expand, cell_index):
 
