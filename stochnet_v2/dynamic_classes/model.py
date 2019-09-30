@@ -93,28 +93,6 @@ class NASStochNet(StochNet):
             self._save_graph_keys()
             self.custom_restore_from_checkpoint(ckpt_path)
 
-    # def finalize(self):
-    #     graph = tf.compat.v1.Graph()
-    #     with graph.as_default():
-    #         session = tf.compat.v1.Session()
-    #         graph_def = tf.compat.v1.graph_util.extract_sub_graph(
-    #             graph_def=self.graph.as_graph_def(),
-    #             dest_nodes=self.dest_nodes
-    #         )
-    #         tf.compat.v1.import_graph_def(graph_def, name='')
-    #         self.input_placeholder = graph.get_tensor_by_name(self._input_placeholder_name)
-    #         self.pred_tensor = graph.get_tensor_by_name(self._pred_tensor_name)
-    #         self.pred_tensor = graph.get_tensor_by_name(self._pred_tensor_name)
-    #         self.pred_placeholder = graph.get_tensor_by_name(self._pred_placeholder_name)
-    #         self.sample_shape_placeholder = graph.get_tensor_by_name(self._sample_shape_placeholder_name)
-    #         self.sample_tensor = graph.get_tensor_by_name(self._sample_tensor_name)
-    # 
-    #     self.session.close()
-    #     del self.graph
-    #     del self.session
-    #     self.graph = graph
-    #     self.session = session
-
     def custom_restore_from_checkpoint(self, ckpt_path):
         reader = tf.compat.v1.train.NewCheckpointReader(ckpt_path)
         model_variables = self.graph.get_collection('variables')

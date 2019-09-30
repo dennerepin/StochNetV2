@@ -123,3 +123,100 @@ def apply_regularization(regularizer_fn, tensor):
 def numpy_softmax(x):
     e = np.exp(x - np.max(x))
     return e / np.sum(e, axis=-1, keepdims=True)
+
+
+def postprocess_description_dict(description):
+    if 'logits' in description['cat']:
+        logits = description['cat'].pop('logits')
+        probs = numpy_softmax(logits)
+        description['cat']['probs'] = probs
+
+    for component_dict in description['components']:
+
+        if 'diag' in component_dict:
+            diag = component_dict.pop('diag')
+            batch_size, diag_size = diag.shape
+            cov = np.zeros([batch_size, diag_size, diag_size])
+            for i in range(batch_size):
+                np.fill_diagonal(cov[i], diag[i])
+            component_dict['cov'] = cov
+
+        elif 'tril' in component_dict:
+            tril = component_dict.pop('tril')
+            cov = np.matmul(tril, np.transpose(tril, [0, 2, 1]))
+            component_dict['cov'] = cov
+    return description
+
+
+def visualize_description_(description):
+    cat = description['cat']['probs']
+    batch_size = cat.shape[0]
+
+    for i in range(batch_size):
+        print("=" * 20 + f" {i} " + "=" * 20)
+        print(f"\nProbs:")
+        p = cat[i:i + 1]
+        plt.imshow(p)
+        plt.colorbar()
+        plt.show()
+
+        for j, component_dict in enumerate(description['components']):
+            print(f"\n\nCOMPONENT {j}")
+            print(f"\nMean:")
+            m = component_dict['mean']
+            plt.imshow(m[i:i + 1])
+            plt.colorbar()
+            plt.show()
+
+            print(f"\nCov:")
+            c = component_dict['cov']
+            plt.imshow(c[i])
+            plt.colorbar()
+            plt.show()
+
+
+def visualize_description(description, save_figs_to=None, prefix='distribution_visualization'):
+    cat = description['cat']['probs']
+    batch_size = cat.shape[0]
+    n_components = len(description['components'])
+
+    figures = []
+
+    for i in range(batch_size):
+
+        fig, axes = plt.subplots(nrows=n_components + 1, ncols=2, figsize=(16, 8 * (n_components + 1)))
+
+        p = cat[i:i + 1]
+        ax = axes[0, 0]
+        im = ax.imshow(p)
+        plt.colorbar(im, ax=ax, orientation='vertical', shrink=0.5)
+        ax.set_title("Probs")
+        ax.get_xaxis().set_ticks(range(n_components))
+        ax.get_yaxis().set_ticks([])
+
+        ax = axes[0, 1]
+        ax.set_axis_off()
+
+        for j, component_dict in enumerate(description['components']):
+            m = component_dict['mean']
+            ax = axes[j + 1, 0]
+            im = ax.imshow(m[i:i + 1])
+            plt.colorbar(im, ax=ax, orientation='vertical', shrink=0.5)
+            ax.set_title("Mean")
+            ax.get_yaxis().set_ticks([])
+
+            c = component_dict['cov']
+            ax = axes[j + 1, 1]
+            im = ax.imshow(c[i])
+            plt.colorbar(im, ax=ax, orientation='vertical', shrink=0.5)
+            ax.set_title("Covariance")
+
+        fig.tight_layout()
+        fig.suptitle(f"Component {i}", fontsize=16, y=1.0)
+        figures.append(fig)
+
+        if isinstance(save_figs_to, str):
+            maybe_create_dir(save_figs_to)
+            [fig.savefig(os.path.join(save_figs_to, f'{prefix}_{i}')) for i, fig in enumerate(figures)]
+
+    return figures

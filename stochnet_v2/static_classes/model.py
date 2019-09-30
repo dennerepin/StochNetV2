@@ -18,6 +18,8 @@ from stochnet_v2.utils.errors import NotRestoredVariables
 from stochnet_v2.utils.registry import ACTIVATIONS_REGISTRY
 from stochnet_v2.utils.registry import CONSTRAINTS_REGISTRY
 from stochnet_v2.utils.registry import REGULARIZERS_REGISTRY
+from stochnet_v2.utils.util import postprocess_description_dict
+from stochnet_v2.utils.util import visualize_description
 
 
 LOGGER = logging.getLogger('static_classes.model')
@@ -275,15 +277,19 @@ class StochNet:
             self,
             nn_prediction_val=None,
             current_state_val=None,
+            current_state_rescaled=False,
+            visualize=False,
     ):
         if nn_prediction_val is None:
             if current_state_val is None:
                 raise ValueError("Should provide either current_state_val or nn_prediction_val")
+            if not current_state_rescaled:
+                current_state_val = self.rescale(current_state_val)
             nn_prediction_val = self.session.run(
                 self.pred_tensor,
                 feed_dict={self.input_placeholder: current_state_val}
             )
-        res = self.session.run(
+        description = self.session.run(
             self.description_graphkeys,
             feed_dict={
                 self.pred_placeholder: nn_prediction_val,
@@ -291,7 +297,12 @@ class StochNet:
             }
         )
 
-        return res
+        description = postprocess_description_dict(description)
+
+        if visualize:
+            visualize_description(description)
+
+        return description
 
     @property
     def input_placeholder(self):
