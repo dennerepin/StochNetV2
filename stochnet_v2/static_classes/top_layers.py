@@ -54,7 +54,7 @@ class RandomVariableOutputLayer(abc.ABC):
         self._sample_shape_placeholder = None
         self._sample_tensor = None
         self._sampling_graph = None
-        self._session_hash = None
+        # self._session_hash = None
 
         self._sample_space_dimension = None
         self._number_of_output_neurons = None
@@ -147,6 +147,10 @@ class RandomVariableOutputLayer(abc.ABC):
     @property
     def sample_tensor(self):
         return self._sample_tensor
+
+    @property
+    def description_graphkeys(self):
+        return self._random_variable.description_graphkeys
 
 
 @MIXTURE_COMPONENTS_REGISTRY.register('categorical')

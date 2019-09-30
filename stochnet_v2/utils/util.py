@@ -120,31 +120,6 @@ def apply_regularization(regularizer_fn, tensor):
     tf.compat.v1.add_to_collection(tf.compat.v1.GraphKeys.REGULARIZATION_LOSSES, loss)
 
 
-def get_description_grapfkeys(mixture_rv):
-    components = mixture_rv.components
-    keys = [{'cat_probs': mixture_rv.cat.distribution_obj.probs.name}]
-
-    for component in components:
-        component_dict = {
-            'mean': component.mean.name,
-            'covariance': component.covariance.name,
-        }
-        keys.append(component_dict)
-
-    return keys
-
-
-def get_description(description_graphkeys, sess, feed_dict):
-    cat_probs_name = description_graphkeys[0]['cat_probs']
-    cat_probs = sess.run(cat_probs_name, feed_dict)
-
-    description = f"\nCategorical probabilities: {cat_probs}\n"
-
-    for i, component_dict in enumerate(description_graphkeys[1:], 1):
-        mean, covariance = sess.run([component_dict['mean'], component_dict['covariance']], feed_dict)
-        description += \
-            f"\nComponent {i}:\n" \
-            f"  mean: \n{mean}\n" \
-            f"  covariance: \n{covariance}\n"
-
-    return description
+def numpy_softmax(x):
+    e = np.exp(x - np.max(x))
+    return e / np.sum(e, axis=-1, keepdims=True)

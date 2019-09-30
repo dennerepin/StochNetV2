@@ -96,6 +96,7 @@ class StochNet:
         self._sample_shape_placeholder_name = None
         self._sample_tensor = None
         self._sample_tensor_name = None
+        self._description_graphkeys = None
         self.restored = False
 
         self.graph = tf.compat.v1.Graph()
@@ -180,6 +181,7 @@ class StochNet:
         self.pred_placeholder = self.top_layer_obj.pred_placeholder
         self.sample_shape_placeholder = self.top_layer_obj.sample_shape_placeholder
         self.sample_tensor = self.top_layer_obj.sample_tensor
+        self.description_graphkeys = self.top_layer_obj.description_graphkeys
 
     def restore_from_checkpoint(self, ckpt_path):
         with self.graph.as_default():
@@ -218,8 +220,10 @@ class StochNet:
             'pred_tensor': self._pred_tensor_name,
             'pred_placeholder':  self._pred_placeholder_name,
             'sample_shape_placeholder': self._sample_shape_placeholder_name,
-            'sample_tensor':  self._sample_tensor_name
+            'sample_tensor':  self._sample_tensor_name,
+            'description_graphkeys': self.description_graphkeys
         }
+
         with open(self.model_explorer.graph_keys_fp, 'w') as f:
             json.dump(graph_keys_dict, f, indent='\t')
         LOGGER.info(f"Model's graph keys saved at {self.model_explorer.graph_keys_fp}")
@@ -265,6 +269,29 @@ class StochNet:
         self.pred_placeholder = self.graph.get_tensor_by_name(graph_keys['pred_placeholder'])
         self.sample_shape_placeholder = self.graph.get_tensor_by_name(graph_keys['sample_shape_placeholder'])
         self.sample_tensor = self.graph.get_tensor_by_name(graph_keys['sample_tensor'])
+        self.description_graphkeys = graph_keys['description_graphkeys']
+
+    def get_description(
+            self,
+            nn_prediction_val=None,
+            current_state_val=None,
+    ):
+        if nn_prediction_val is None:
+            if current_state_val is None:
+                raise ValueError("Should provide either current_state_val or nn_prediction_val")
+            nn_prediction_val = self.session.run(
+                self.pred_tensor,
+                feed_dict={self.input_placeholder: current_state_val}
+            )
+        res = self.session.run(
+            self.description_graphkeys,
+            feed_dict={
+                self.pred_placeholder: nn_prediction_val,
+                self.sample_shape_placeholder: 1
+            }
+        )
+
+        return res
 
     @property
     def input_placeholder(self):
@@ -314,6 +341,14 @@ class StochNet:
     @property
     def dest_nodes(self):
         return [t.split(':')[0] for t in [self._sample_tensor_name, self._pred_tensor_name]]
+
+    @property
+    def description_graphkeys(self):
+        return self._description_graphkeys
+
+    @description_graphkeys.setter
+    def description_graphkeys(self, graphkeys):
+        self._description_graphkeys = graphkeys
 
     def _copy_dataset_scaler(self):
         print('Copying dataset scaler to model dir...')

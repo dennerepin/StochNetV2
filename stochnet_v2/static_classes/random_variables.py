@@ -15,6 +15,7 @@ class Categorical:
             logits,
             validate_args=False,
     ):
+        self._logits = logits
         self.distribution_obj = tfd.Categorical(
             logits=logits,
             validate_args=validate_args,
@@ -28,6 +29,14 @@ class Categorical:
     def nb_of_independent_random_variables(self):
         return int(np.array(self.distribution_obj.batch_shape).prod())
 
+    @property
+    def probs(self):
+        return self.distribution_obj.probs
+
+    @property
+    def description_graphkeys(self):
+        return {'logits': self._logits.name}
+
     def get_description(self):
         descriptions = []
 
@@ -36,7 +45,7 @@ class Categorical:
                 self.number_of_classes = self.number_of_classes.eval()
 
             flattened_class_probabilities = tf.reshape(
-                self.distribution_obj.probs,
+                self.probs,
                 [-1, self.number_of_classes]
             ).eval()
 
@@ -65,6 +74,9 @@ class MultivariateNormalDiag:
             validate_args=validate_args,
         )
 
+        self._normal_mean = mu
+        self._normal_diag = diag
+
     def log_prob(self, value):
         return self.distribution_obj.log_prob(value)
 
@@ -80,12 +92,16 @@ class MultivariateNormalDiag:
     def sample_space_dimension(self):
         return self.distribution_obj.event_shape.as_list()[0]
 
-    def sample(self, sample_shape=()):
-        return self.distribution_obj.sample(sample_shape=sample_shape)
-
     @property
     def nb_of_independent_random_variables(self):
         return int(np.array(self.distribution_obj.batch_shape).prod())
+
+    @property
+    def description_graphkeys(self):
+        return {'mean': self._normal_mean.name, 'diag': self._normal_diag.name}
+
+    def sample(self, sample_shape=()):
+        return self.distribution_obj.sample(sample_shape=sample_shape)
 
     def get_description(self):
         descriptions = []
@@ -125,6 +141,9 @@ class MultivariateNormalTriL:
             validate_args=validate_args,
         )
 
+        self._normal_mean = mu
+        self._normal_tril = tril
+
     def log_prob(self, value):
         return self.distribution_obj.log_prob(value)
 
@@ -140,12 +159,16 @@ class MultivariateNormalTriL:
     def sample_space_dimension(self):
         return self.distribution_obj.event_shape.as_list()[0]
 
-    def sample(self, sample_shape=()):
-        return self.distribution_obj.sample(sample_shape=sample_shape)
-
     @property
     def nb_of_independent_random_variables(self):
         return int(np.array(self.distribution_obj.batch_shape).prod())
+
+    @property
+    def description_graphkeys(self):
+        return {'mean': self._normal_mean.name, 'tril': self._normal_tril.name}
+
+    def sample(self, sample_shape=()):
+        return self.distribution_obj.sample(sample_shape=sample_shape)
 
     def get_description(self):
         descriptions = []
@@ -215,12 +238,16 @@ class MultivariateLogNormalTriL:
     def sample_space_dimension(self):
         return self.distribution_obj.event_shape.as_list()[0]
 
-    def sample(self, sample_shape=()):
-        return self.distribution_obj.sample(sample_shape=sample_shape)
-
     @property
     def nb_of_independent_random_variables(self):
         return int(np.array(self.distribution_obj.batch_shape).prod())
+
+    @property
+    def description_graphkeys(self):
+        return {'mean': self._normal_mean.name, 'tril': self._normal_tril.name}
+
+    def sample(self, sample_shape=()):
+        return self.distribution_obj.sample(sample_shape=sample_shape)
 
     def get_description(self):
         descriptions = []
@@ -267,15 +294,22 @@ class Mixture:
             validate_args=validate_args
         )
 
+    @property
+    def nb_of_independent_random_variables(self):
+        return np.array(self.distribution_obj.batch_shape).prod()
+
+    @property
+    def description_graphkeys(self):
+        description_graphkeys = {'cat': self.cat.description_graphkeys, 'components': []}
+        for component in self.components:
+            description_graphkeys['components'].append(component.description_graphkeys)
+        return description_graphkeys
+
     def log_prob(self, value):
         return self.distribution_obj.log_prob(value)
 
     def sample(self, sample_shape=()):
         return self.distribution_obj.sample(sample_shape=sample_shape)
-
-    @property
-    def nb_of_independent_random_variables(self):
-        return np.array(self.distribution_obj.batch_shape).prod()
 
     def get_description(self):
         descriptions = []
