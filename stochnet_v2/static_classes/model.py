@@ -75,8 +75,6 @@ class StochNet:
             timestep,
             dataset_id,
             model_id,
-            body_config_path=None,
-            mixture_config_path=None,
             ckpt_path=None,
             mode='normal',
     ):
@@ -108,7 +106,7 @@ class StochNet:
             self.session = tf.compat.v1.Session()
 
             if mode == 'normal':
-                self._init_normal(body_config_path, mixture_config_path, ckpt_path)
+                self._init_normal(ckpt_path)
                 self._copy_dataset_scaler()
 
             elif mode == 'inference':
@@ -128,17 +126,10 @@ class StochNet:
 
     def _init_normal(
             self,
-            body_config_path,
-            mixture_config_path,
             ckpt_path,
     ):
-        if body_config_path is None:
-            raise ValueError("Should provide `body_config_path` to build model")
-        body_config = self._read_config(body_config_path, 'body_config.json')
-
-        if mixture_config_path is None:
-            raise ValueError("Should provide `mixture_config_path` to build model")
-        mixture_config = self._read_config(mixture_config_path, 'mixture_config.json')
+        body_config = self._read_config(self.model_explorer.body_config_fp)
+        mixture_config = self._read_config(self.model_explorer.mixture_config_fp)
 
         body_fn = self._get_body_fn(body_config)
         self._build_main_graph(body_fn, mixture_config)
@@ -164,7 +155,7 @@ class StochNet:
     def _get_body_fn(self, body_config):
         return partial(nn_bodies.body_main, **body_config)
 
-    def _build_main_graph(self, body_fn, mixture_config_path):
+    def _build_main_graph(self, body_fn, mixture_config):
         self.input_placeholder = tf.compat.v1.placeholder(
             tf.float32, (None, self.nb_past_timesteps, self.nb_features), name="input"
         )
@@ -172,7 +163,7 @@ class StochNet:
             tf.float32, (None, self.nb_features), name="random_variable_output"
         )
         body = body_fn(self.input_placeholder)
-        self.top_layer_obj = _get_mixture(mixture_config_path, sample_space_dimension=self.nb_features)
+        self.top_layer_obj = _get_mixture(mixture_config, sample_space_dimension=self.nb_features)
         self.pred_tensor = self.top_layer_obj.add_layer_on_top(body)
         self.loss = self.top_layer_obj.loss_function(self.rv_output_ph, self.pred_tensor)
 

@@ -86,8 +86,9 @@ class ModelFileExplorer:
         maybe_create_dir(self.model_folder)
         self.frozen_graph_fp = os.path.join(self.model_folder, 'frozen_graph.pb')
         self.graph_keys_fp = os.path.join(self.model_folder, 'graph_keys.json')
-        self.mixture_config_path = os.path.join(self.model_folder, 'mixture_config.json')
-        self.body_config_path = os.path.join(self.model_folder, 'body_config.json')
+        self.mixture_config_fp = os.path.join(self.model_folder, 'mixture_config.json')
+        self.body_config_fp = os.path.join(self.model_folder, 'body_config.json')
+        self.scaler_fp = os.path.join(self.model_folder, 'scaler.pickle')
 
 
 class HistogramFileExplorer:
