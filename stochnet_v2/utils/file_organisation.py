@@ -84,6 +84,7 @@ class ModelFileExplorer:
             str(self.model_id),
         )
         maybe_create_dir(self.model_folder)
+        self.log_fp = os.path.join(self.model_folder, 'log.txt')
         self.frozen_graph_fp = os.path.join(self.model_folder, 'frozen_graph.pb')
         self.graph_keys_fp = os.path.join(self.model_folder, 'graph_keys.json')
         self.mixture_config_fp = os.path.join(self.model_folder, 'mixture_config.json')

@@ -79,16 +79,32 @@ _REG_LOSS_WEIGHT = 1.0
 #     optimizer_type='adam',
 #     initial_lr=1e-4,
 #     lr_decay=1e-4,
-#     lr_cos_steps=None,
+#     lr_cos_steps=0,
 #     lr_cos_phase=np.pi / 2,
 #     minimal_lr=1e-7,
 # )
 
-_DEFAULT_LEARNING_STRATEGY = ToleranceDropLearningStrategy(
+_DEFAULT_LEARNING_STRATEGY_MAIN = ToleranceDropLearningStrategy(
     optimizer_type='adam',
     initial_lr=1e-4,
-    lr_decay=0.6,
-    epochs_tolerance=6,
+    lr_decay=0.3,
+    epochs_tolerance=7,
+    minimal_lr=1e-7,
+)
+
+_DEFAULT_LEARNING_STRATEGY_ARCH = ToleranceDropLearningStrategy(
+    optimizer_type='adam',
+    initial_lr=1e-3,
+    lr_decay=0.5,
+    epochs_tolerance=20,
+    minimal_lr=1e-7,
+)
+
+_DEFAULT_LEARNING_STRATEGY_FINETUNE = ToleranceDropLearningStrategy(
+    optimizer_type='adam',
+    initial_lr=1e-4,
+    lr_decay=0.3,
+    epochs_tolerance=5,
     minimal_lr=1e-7,
 )
 
@@ -120,9 +136,9 @@ class Trainer:
         n_epochs_heat_up = n_epochs_heat_up or _DEFAULT_NUMBER_OF_EPOCHS_HEAT_UP
         n_epochs_arch = n_epochs_arch or _DEFAULT_NUMBER_OF_EPOCHS_ARCH
         n_epochs_interval = n_epochs_interval or _DEFAULT_N_EPOCHS_INTERVAL
-        learning_strategy_main = learning_strategy_main or _DEFAULT_LEARNING_STRATEGY
-        learning_strategy_arch = learning_strategy_arch or _DEFAULT_LEARNING_STRATEGY
-        learning_strategy_finetune = learning_strategy_finetune or _DEFAULT_LEARNING_STRATEGY
+        learning_strategy_main = learning_strategy_main or _DEFAULT_LEARNING_STRATEGY_MAIN
+        learning_strategy_arch = learning_strategy_arch or _DEFAULT_LEARNING_STRATEGY_ARCH
+        learning_strategy_finetune = learning_strategy_finetune or _DEFAULT_LEARNING_STRATEGY_FINETUNE
 
         if 'search' in mode:
             trainable_graph, train_operations_main, train_operations_arch, train_input_x, train_input_y = \
@@ -289,7 +305,7 @@ class Trainer:
                 model.recreate_from_genome(best_loss_checkpoint_path)
 
             if 'finetune' in mode:
-                self.finetune(
+                best_loss_checkpoint_path = self.finetune(
                     recreated_model=model,
                     recreated_model_ckpt_path=best_loss_checkpoint_path,
                     learning_strategy_finetune=learning_strategy_finetune,
@@ -308,7 +324,7 @@ class Trainer:
             model.restore_from_checkpoint(ckpt_path)
             model.save_genotypes()
             model.recreate_from_genome(ckpt_path)
-            self.finetune(
+            best_loss_checkpoint_path = self.finetune(
                     recreated_model=model,
                     recreated_model_ckpt_path=ckpt_path,
                     learning_strategy_finetune=learning_strategy_finetune,
@@ -323,6 +339,8 @@ class Trainer:
                 f"The `mode` parameter not understood: {mode}."
                 f" Expected list or string including optional 'search' and 'finetune' keywords."
             )
+
+        return best_loss_checkpoint_path
 
     def finetune(
             self,
@@ -743,7 +761,7 @@ class Trainer:
             if learning_strategy.__class__.__name__ == 'ExpDecayLearningStrategy':
                 lr = initial_lr.copy()
                 lr *= np.exp(-global_step * learning_strategy.lr_decay)
-                if learning_strategy.lr_cos_steps is not None:
+                if learning_strategy.lr_cos_steps:
                     lr *= np.abs(
                         np.cos(learning_strategy.lr_cos_phase * decay_step / learning_strategy.lr_cos_steps)
                     )
@@ -894,7 +912,7 @@ class Trainer:
 
                 # reset optimizer parameters for next cosine phase
                 if learning_strategy.__class__.__name__ == 'ExpDecayLearningStrategy':
-                    if learning_strategy.lr_cos_steps is not None:
+                    if learning_strategy.lr_cos_steps:
                         if global_step % learning_strategy.lr_cos_steps == 0 and global_step > 0:
                             LOGGER.info('Reinitialize optimizer...')
                             _reset_optimizer()

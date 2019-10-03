@@ -75,6 +75,8 @@ class StochNet:
             timestep,
             dataset_id,
             model_id,
+            body_config_path=None,
+            mixture_config_path=None,
             ckpt_path=None,
             mode='normal',
     ):
@@ -106,7 +108,7 @@ class StochNet:
             self.session = tf.compat.v1.Session()
 
             if mode == 'normal':
-                self._init_normal(ckpt_path)
+                self._init_normal(body_config_path, mixture_config_path, ckpt_path)
                 self._copy_dataset_scaler()
 
             elif mode == 'inference':
@@ -126,11 +128,24 @@ class StochNet:
 
     def _init_normal(
             self,
+            body_config_path,
+            mixture_config_path,
             ckpt_path,
     ):
-        body_config = self._read_config(self.model_explorer.body_config_fp)
-        mixture_config = self._read_config(self.model_explorer.mixture_config_fp)
-
+        if body_config_path is None:
+            body_config = self._read_config(self.model_explorer.body_config_fp)
+        else:
+            body_config = self._read_config(
+                body_config_path,
+                os.path.basename(self.model_explorer.body_config_fp)
+            )
+        if mixture_config_path is None:
+            mixture_config = self._read_config(self.model_explorer.mixture_config_fp)
+        else:
+            mixture_config = self._read_config(
+                mixture_config_path,
+                os.path.basename(self.model_explorer.mixture_config_fp)
+            )
         body_fn = self._get_body_fn(body_config)
         self._build_main_graph(body_fn, mixture_config)
         self._build_sampling_graph()
