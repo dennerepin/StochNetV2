@@ -10,17 +10,6 @@ from importlib import import_module
 from tqdm import tqdm
 from time import time
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--project_folder', type=str, required=True)
-parser.add_argument('--timestep', type=float, required=True)
-parser.add_argument('--dataset_id', type=int, required=True)
-parser.add_argument('--nb_settings', type=int, required=True)
-parser.add_argument('--nb_trajectories', type=int, required=True)
-parser.add_argument('--endtime', type=float, required=True)
-parser.add_argument('--model_name', type=str, required=True)
-parser.add_argument('--random_seed', type=int, default=23)
-args = parser.parse_args()
-
 
 def build_simulation_dataset(
         model_name,
@@ -167,32 +156,51 @@ def save_simulation_data(
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--project_folder', type=str, required=True)
+    parser.add_argument('--timestep', type=float, required=True)
+    parser.add_argument('--dataset_id', type=int, required=True)
+    parser.add_argument('--nb_settings', type=int, required=True)
+    parser.add_argument('--nb_trajectories', type=int, required=True)
+    parser.add_argument('--endtime', type=float, required=True)
+    parser.add_argument('--model_name', type=str, required=True)
+    parser.add_argument('--random_seed', type=int, default=23)
+    args = parser.parse_args()
 
     path = os.path.dirname(__file__)
     sys.path.append(os.path.join(path, '../..'))
     from stochnet_v2.utils.file_organisation import ProjectFileExplorer
 
+    project_folder = args.project_folder
+    timestep = args.timestep
+    dataset_id = args.dataset_id
+    nb_settings = args.nb_settings
+    nb_trajectories = args.nb_trajectories
+    endtime = args.endtime
+    model_name = args.model_name
+    random_seed = args.random_seed
+
     print(">>> START")
     start = time()
 
-    np.random.seed(args.random_seed)
+    np.random.seed(random_seed)
 
-    project_explorer = ProjectFileExplorer(args.project_folder)
-    dataset_explorer = project_explorer.get_dataset_file_explorer(args.timestep, args.dataset_id)
+    project_explorer = ProjectFileExplorer(project_folder)
+    dataset_explorer = project_explorer.get_dataset_file_explorer(timestep, dataset_id)
 
-    crn_module = import_module("stochnet_v2.CRN_models." + args.model_name)
-    crn_class = getattr(crn_module, args.model_name)
-    settings = crn_class.get_initial_settings(args.nb_settings)
+    crn_module = import_module("stochnet_v2.CRN_models." + model_name)
+    crn_class = getattr(crn_module, model_name)
+    settings = crn_class.get_initial_settings(nb_settings)
     np.save(dataset_explorer.settings_fp, settings)
 
     print(f"Dataset folder: {dataset_explorer.dataset_folder}")
 
     dataset = build_simulation_dataset(
-        args.model_name,
-        args.nb_settings,
-        args.nb_trajectories,
-        args.timestep,
-        args.endtime,
+        model_name,
+        nb_settings,
+        nb_trajectories,
+        timestep,
+        endtime,
         dataset_explorer.dataset_folder,
         how='concat'
     )
@@ -202,9 +210,9 @@ def main():
 
     end = time()
     execution_time = end - start
-    msg = f"Simulating {args.nb_trajectories} {args.model_name} " \
-          f"trajectories for {args.nb_settings} different settings " \
-          f"with endtime {args.endtime} took {execution_time} seconds.\n"\
+    msg = f"Simulating {nb_trajectories} {model_name} " \
+          f"trajectories for {nb_settings} different settings " \
+          f"with endtime {endtime} took {execution_time} seconds.\n"\
 
     with open(dataset_explorer.log_fp, 'a') as f:
         f.write(msg)
@@ -215,14 +223,15 @@ def main():
 if __name__ == '__main__':
     main()
 
+
 """
 python stochnet_v2/dataset/dataset_simulation.py \
-       --project_folder='/home/dn/DATA/Gene' \
-       --timestep=400 \
-       --dataset_id=3 \
-       --nb_settings=2 \
-       --nb_trajectories=5 \
-       --endtime=10000 \
-       --model_name='Gene' \
-       --random_seed=43
+       --project_folder '/home/dn/DATA/EGFR' \
+       --timestep 0.2 \
+       --dataset_id 1 \
+       --nb_settings 2 \
+       --nb_trajectories 5 \
+       --endtime 10 \
+       --model_name 'EGFR' \
+       --random_seed 43
 """

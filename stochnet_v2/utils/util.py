@@ -8,6 +8,16 @@ import tensorflow as tf
 from functools import partial
 
 
+def str_to_bool(arg):
+    arg_upper = str(arg).upper()
+    if 'TRUE'.startswith(arg_upper):
+        return True
+    elif 'FALSE'.startswith(arg_upper):
+        return False
+    else:
+        pass
+
+
 def maybe_create_dir(dir_path, erase_existing=False):
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)
