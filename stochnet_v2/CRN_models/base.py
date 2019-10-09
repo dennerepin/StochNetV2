@@ -69,7 +69,7 @@ class BaseCRNModel(gillespy.Model):
         return histogram_bounds
 
 
-class SBMLModel(BaseCRNModel):
+class BaseSBMLModel(BaseCRNModel):
 
     def __init__(
             self,

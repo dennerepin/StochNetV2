@@ -1,10 +1,8 @@
 import tensorflow as tf
 
 from stochnet_v2.dynamic_classes.op_registry import OP_REGISTRY
-from stochnet_v2.dynamic_classes.op_registry import simple_dense as dense  # TODO: ?
-# from stochnet_v2.dynamic_classes.op_registry import dense_relu as dense  # TODO: ?
-# from stochnet_v2.dynamic_classes.op_registry import bn_dense_relu as dense  # TODO: ?
-# from stochnet_v2.dynamic_classes.op_registry import relu_dense_bn as dense  # TODO: ?
+from stochnet_v2.dynamic_classes.op_registry import simple_dense as dense
+# from stochnet_v2.dynamic_classes.op_registry import activated_dense as dense  # TODO: ?
 from stochnet_v2.dynamic_classes.util import expand_cell
 
 

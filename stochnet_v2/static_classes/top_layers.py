@@ -20,8 +20,6 @@ initializer = tf.initializers.glorot_normal
 # initializer = None
 
 _DIAG_MIN = 0.01
-# _EPS = 1e-3
-# _MAX = np.inf
 _DIAG_MAX = 1.0
 _SUB_DIAG_MAX = 1.0
 

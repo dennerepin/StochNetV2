@@ -3,10 +3,8 @@ import tensorflow as tf
 import tensorflow_probability as tfp
 
 from stochnet_v2.dynamic_classes.op_registry import OP_REGISTRY
-from stochnet_v2.dynamic_classes.op_registry import simple_dense as dense  # TODO: ?
-# from stochnet_v2.dynamic_classes.op_registry import dense_relu as dense  # TODO: ?
-# from stochnet_v2.dynamic_classes.op_registry import bn_dense_relu as dense  # TODO: ?
-# from stochnet_v2.dynamic_classes.op_registry import relu_dense_bn as dense  # TODO: ?
+from stochnet_v2.dynamic_classes.op_registry import simple_dense as dense
+# from stochnet_v2.dynamic_classes.op_registry import activated_dense as dense  # TODO: ?
 from stochnet_v2.dynamic_classes.genotypes import Genotype
 from stochnet_v2.dynamic_classes.genotypes import PRIMITIVES
 from stochnet_v2.dynamic_classes.util import expand_cell
@@ -119,6 +117,9 @@ def cell(
                 # expansion_coeff = expansion_multiplier if expand and j < 2 else 1
                 expansion_coeff = 1
                 with tf.compat.v1.variable_scope(f"mixed_op_{j}_{i + 2}"):
+                    # TODO: mixed_op makes it harder for resulting (pruned)
+                    # model to perform the same way as the scales are different because of summ
+                    # mixed_op_cat avoids this by picking only one edge per time
                     mix = mixed_op_cat(state[j], expansion_coeff, **kwargs)
                 tmp.append(mix)
 

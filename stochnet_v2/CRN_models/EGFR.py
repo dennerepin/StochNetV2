@@ -1,10 +1,10 @@
 import gillespy
 import numpy as np
 import os
-from stochnet_v2.CRN_models.base import SBMLModel
+from stochnet_v2.CRN_models.base import BaseSBMLModel
 
 
-class EGFR(SBMLModel):
+class EGFR(BaseSBMLModel):
 
     _hist_top_bound = 200
 

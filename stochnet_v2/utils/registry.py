@@ -73,6 +73,7 @@ REGULARIZERS_REGISTRY['none'] = None
 
 ACTIVATIONS_REGISTRY['relu'] = tf.compat.v1.nn.relu
 ACTIVATIONS_REGISTRY['relu6'] = tf.compat.v1.nn.relu6
+ACTIVATIONS_REGISTRY['swish'] = tf.compat.v1.nn.swish
 ACTIVATIONS_REGISTRY['none'] = tf.keras.activations.linear
 ACTIVATIONS_REGISTRY['leakyrelu'] = tf.keras.layers.LeakyReLU(0.2)
 ACTIVATIONS_REGISTRY['prelu'] = tf.keras.layers.PReLU()
