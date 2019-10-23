@@ -1,3 +1,4 @@
+import graphviz
 import matplotlib.pyplot as plt
 import math
 import multiprocessing
@@ -230,3 +231,149 @@ def visualize_description(description, save_figs_to=None, prefix='distribution_v
             [fig.savefig(os.path.join(save_figs_to, f'{prefix}_{i}')) for i, fig in enumerate(figures)]
 
     return figures
+
+
+def visualize_genotypes_(genotypes, filename_base):
+
+    for genotype in genotypes:
+
+        if not len(genotype.normal) == 0:
+            filename = filename_base + '_normal'
+            genotype = genotype.normal
+        else:
+            assert not len(genotype.expand) == 0
+            filename = filename_base + '_expand'
+            genotype = genotype.expand
+
+        g = graphviz.Digraph(
+            format='pdf',
+            edge_attr=dict(fontsize='20', fontname="times"),
+            node_attr=dict(
+                style='filled',
+                shape='rect',
+                align='center',
+                fontsize='20',
+                height='0.5',
+                width='0.5',
+                penwidth='2',
+                fontname="times"),
+            engine='dot')
+
+        g.body.extend(['rankdir=LR'])
+        g.node("c_{k-2}", fillcolor='darkseagreen2')
+        g.node("c_{k-1}", fillcolor='darkseagreen2')
+        assert len(genotype) % 2 == 0
+        steps = len(genotype) // 2
+
+        for i in range(steps):
+            g.node(str(i), fillcolor='lightblue')
+
+        for i in range(steps):
+            for k in [2 * i, 2 * i + 1]:
+                print(genotype[k])
+                if len(genotype[k]) == 0:
+                    continue
+                op, j = genotype[k]
+                if j == 0:
+                    u = "c_{k-2}"
+                elif j == 1:
+                    u = "c_{k-1}"
+                else:
+                    u = str(j - 2)
+                v = str(i)
+                g.edge(u, v, label=op, fillcolor="gray")
+
+        g.node("c_{k}", fillcolor='palegoldenrod')
+
+        for i in range(steps):
+            g.edge(str(i), "c_{k}", fillcolor="gray")
+
+        g.render(filename, view=True)
+
+
+def visualize_genotypes(genotypes, filename):
+    # TODO: add state0 and state1 (dense) in the beginning of each cell.
+
+    gg = graphviz.Digraph(
+        format='pdf',
+        edge_attr=dict(fontsize='20', fontname="times"),
+        node_attr=dict(
+            style='filled',
+            shape='rect',
+            align='center',
+            fontsize='20',
+            height='0.5',
+            width='0.5',
+            penwidth='2',
+            fontname="times"),
+        engine='dot')
+
+    gg.body.extend(['rankdir=LR'])
+    gg.node("input1", fillcolor='darkseagreen2')
+    gg.node("input2", fillcolor='darkseagreen2')
+
+    for cell_num, genotype in enumerate(genotypes, 1):
+
+        g = graphviz.Digraph(
+            format='pdf',
+            edge_attr=dict(fontsize='20', fontname="times"),
+            node_attr=dict(
+                style='filled',
+                shape='rect',
+                align='center',
+                fontsize='20',
+                height='0.5',
+                width='0.5',
+                penwidth='2',
+                fontname="times"),
+            engine='dot')
+
+        if not len(genotype.normal) == 0:
+            genotype = genotype.normal
+        else:
+            assert not len(genotype.expand) == 0
+            genotype = genotype.expand
+
+        if cell_num == 1:
+            v_pprev = "input1"
+            v_prev = "input2"
+        elif cell_num == 2:
+            v_pprev = "input2"
+            v_prev = f"C{cell_num - 1}_out"
+        else:
+            v_pprev = f"C{cell_num - 2}_out"
+            v_prev = f"C{cell_num - 1}_out"
+
+        g.node(v_pprev, fillcolor='darkseagreen2')
+        g.node(v_prev, fillcolor='darkseagreen2')
+
+        assert len(genotype) % 2 == 0
+        steps = len(genotype) // 2
+
+        for i in range(steps):
+            g.node(f"C{cell_num}_s{i}", fillcolor='lightblue')
+
+        for i in range(steps):
+            for k in [2 * i, 2 * i + 1]:
+                print(genotype[k])
+                if len(genotype[k]) == 0:
+                    continue
+                op, j = genotype[k]
+                if j == 0:
+                    u = v_pprev
+                elif j == 1:
+                    u = v_prev
+                else:
+                    u = f"C{cell_num}_s{j-2}"
+                v = f"C{cell_num}_s{i}"
+                g.edge(u, v, label=op, fillcolor="gray")
+
+        g.node(f"C{cell_num}_out", fillcolor='palegoldenrod')
+
+        for i in range(steps):
+            g.edge(f"C{cell_num}_s{i}", f"C{cell_num}_out", fillcolor="gray")
+
+        gg.subgraph(g)
+
+    gg.render(filename, view=True)
+    return gg
