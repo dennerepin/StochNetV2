@@ -4,7 +4,6 @@ import tensorflow_probability as tfp
 
 from stochnet_v2.dynamic_classes.op_registry import OP_REGISTRY
 from stochnet_v2.dynamic_classes.op_registry import simple_dense as dense
-# from stochnet_v2.dynamic_classes.op_registry import activated_dense as dense  # TODO: ?
 from stochnet_v2.dynamic_classes.genotypes import Genotype
 from stochnet_v2.dynamic_classes.genotypes import PRIMITIVES
 from stochnet_v2.dynamic_classes.util import expand_cell
@@ -21,7 +20,7 @@ def mixed_op(x, expansion_coeff, **kwargs):
         alphas = tf.compat.v1.get_variable(
             name=f"alphas",
             shape=[len(PRIMITIVES)],
-            initializer=tf.compat.v1.ones_initializer,
+            initializer=tf.compat.v1.zeros_initializer,
             trainable=True,
         )
 
@@ -32,7 +31,13 @@ def mixed_op(x, expansion_coeff, **kwargs):
     outputs = []
     for idx, primitive in enumerate(PRIMITIVES):
         out = OP_REGISTRY[primitive](x, expansion_coeff, **kwargs)
-        alpha = alphas[idx]
+
+        # alpha = alphas[idx]
+
+        mask = [i == idx for i in range(len(PRIMITIVES))]
+        alphas_mask = tf.constant(mask, tf.bool)
+        alpha = tf.boolean_mask(alphas, alphas_mask)
+
         outputs.append(alpha * out)
 
     out = tf.compat.v1.add_n(outputs)
@@ -47,7 +52,7 @@ def cat_onehot(a):
     one_hot = tf.one_hot(cat, depth=a.shape.as_list()[0])
 
     def grad(dy):
-        return dy * one_hot * a
+        return dy * one_hot  # * a
 
     return one_hot, grad
 
@@ -58,12 +63,12 @@ def mixed_op_cat(x, expansion_coeff, **kwargs):
         alphas = tf.compat.v1.get_variable(
             name=f"alphas",
             shape=[len(PRIMITIVES)],
-            initializer=tf.compat.v1.ones_initializer,
+            initializer=tf.compat.v1.zeros_initializer,
             trainable=True,
         )
 
         alphas = tf.nn.softmax(alphas)
-        alphas_reg_loss = - l2_regularizer(alphas, 0.01)
+        alphas_reg_loss = - l2_regularizer(alphas, 0.001)
         tf.compat.v1.add_to_collection('architecture_regularization_losses', alphas_reg_loss)
 
     outputs = []
@@ -89,7 +94,7 @@ def cell(
         expand_prev,
         expansion_multiplier,
         cell_index,
-        n_summ_states=2,
+        n_states_reduce,
         **kwargs,
 ):
 
@@ -113,31 +118,32 @@ def cell(
 
         for i in range(cell_size):
             tmp = []
-            for j in range(i + 2):
-                # expansion_coeff = expansion_multiplier if expand and j < 2 else 1
+            output_state_idx = i + 2
+            for j in range(output_state_idx):
                 expansion_coeff = 1
-                with tf.compat.v1.variable_scope(f"mixed_op_{j}_{i + 2}"):
-                    # TODO: mixed_op makes it harder for resulting (pruned)
-                    # model to perform the same way as the scales are different because of summ
+                with tf.compat.v1.variable_scope(f"mixed_op_{j}_{output_state_idx}"):
+                    # mixed_op makes it harder for the final (pruned) model
+                    # to perform the same way: layer activations are different
+                    # because of weighted sum of op candidates;
                     # mixed_op_cat avoids this by picking only one edge per time
                     mix = mixed_op_cat(state[j], expansion_coeff, **kwargs)
                 tmp.append(mix)
 
-            with tf.variable_scope(f"state_{i + 2}"):
+            with tf.variable_scope(f"state_{output_state_idx}"):
                 new_state = tf.add_n(tmp)
             state.append(new_state)
 
-        out = tf.compat.v1.add_n(state[-n_summ_states:])
+        out = tf.compat.v1.reduce_mean(state[-n_states_reduce:], 0)
 
     return out
 
 
 def body(
         x,
-        n_cells=4,
-        cell_size=4,
-        expansion_multiplier=4,
-        n_summ_states=2,
+        n_cells,
+        cell_size,
+        expansion_multiplier,
+        n_states_reduce,
         **kwargs
 ):
     # out_dim = x.shape.as_list()[-1]
@@ -157,7 +163,7 @@ def body(
             expand_prev=expand_prev,
             expansion_multiplier=expansion_multiplier,
             cell_index=n,
-            n_summ_states=n_summ_states,
+            n_states_reduce=n_states_reduce,
             **kwargs
         )
         expand_prev = expand
@@ -169,7 +175,7 @@ def get_genotypes(
         session,
         n_cells,
         cell_size,
-        n_summ_states
+        n_states_reduce,
 ):
 
     def _parse(_expand, cell_index):
@@ -184,11 +190,12 @@ def get_genotypes(
         for i in range(cell_size):
             edges = []
             edges_scores = []
-            print(f"STATE {i+2}:")
+            output_state_idx = i + 2
+            print(f"STATE {output_state_idx}:")
 
-            for j in range(i + 2):
+            for j in range(output_state_idx):
 
-                alpha_name = f"{'expand' if _expand else 'normal'}_cell_{cell_index}/mixed_op_{j}_{i + 2}"
+                alpha_name = f"{'expand' if _expand else 'normal'}_cell_{cell_index}/mixed_op_{j}_{output_state_idx}"
                 alpha = [v for v in arch_variables if alpha_name in v.name and 'alphas:' in v.name]
                 if len(alpha) != 1:
                     if len(alpha) > 1:
@@ -203,12 +210,12 @@ def get_genotypes(
 
                 alpha_value_argsort = alpha_value.argsort()
 
-                # TODO: if we keep zero-connections as candidates, we may obtain much smaller graphs,
+                # if we keep zero-connections as candidates, we may obtain much smaller graphs,
                 # as it removes a some of connections. BUT when more than one zero-connections
                 # have large scores they can dominate all other candidate edges which results
                 # in no connection to the state from any another
-
                 # max_index = alpha_value_argsort[-1]
+
                 max_index = \
                     alpha_value_argsort[-1] \
                     if alpha_value_argsort[-1] != PRIMITIVES.index('none') \
@@ -237,17 +244,17 @@ def get_genotypes(
 
     for n in range(n_cells):
         expand = expand_cell(n, n_cells)
-        summ_states = list(range(cell_size + 2 - n_summ_states, cell_size + 2))
+        states_reduce = list(range(cell_size + 2 - n_states_reduce, cell_size + 2))
         gene = _parse(expand, n)
         if expand:
             genotype = Genotype(
-                normal=(), normal_summ=(),
-                expand=gene, expand_summ=summ_states
+                normal=(), normal_reduce=(),
+                expand=gene, expand_reduce=states_reduce
             )
         else:
             genotype = Genotype(
-                normal=gene, normal_summ=summ_states,
-                expand=(), expand_summ=()
+                normal=gene, normal_reduce=states_reduce,
+                expand=(), expand_reduce=()
             )
         genotypes.append(genotype)
 

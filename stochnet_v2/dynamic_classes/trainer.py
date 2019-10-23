@@ -61,15 +61,15 @@ Summaries = namedtuple(
 )
 
 
-_MINIMAL_LEARNING_RATE = 1 * 10 ** - 7
+_MINIMAL_LEARNING_RATE = 10 ** - 7
 _NUMBER_OF_REGULAR_CHECKPOINTS = 10
 _NUMBER_OF_BEST_LOSS_CHECKPOINTS = 5
 _REGULAR_CHECKPOINTS_DELTA = 1000
 _DEFAULT_NUMBER_OF_EPOCHS_MAIN = 100
-_DEFAULT_NUMBER_OF_EPOCHS_HEAT_UP = 10
+_DEFAULT_NUMBER_OF_EPOCHS_HEAT_UP = 20
 _DEFAULT_N_EPOCHS_INTERVAL = 5
 _DEFAULT_NUMBER_OF_EPOCHS_ARCH = 5
-_DEFAULT_BATCH_SIZE = 1024
+_DEFAULT_BATCH_SIZE = 256
 _DEFAULT_PREFETCH_SIZE = 10
 _DEFAULT_MOMENTUM = 0.9
 
@@ -293,8 +293,9 @@ class Trainer:
                             v_val, v_softmax_val = session.run([v, v_softmax_name])
                             print(
                                 f"{v.name} \n"
-                                f"\t{v_val} -> \n"
-                                f"\t{v_softmax_val}, reg_loss={arch_loss_vals[i]} \n"
+                                f"\t{v_val},  min={np.min(v_val):.3f}, max={np.max(v_val):.3f} -> \n"
+                                f"\t{v_softmax_val}, min={np.min(v_softmax_val):.3f}, max={np.max(v_softmax_val):.3f}, "
+                                f"reg_loss={arch_loss_vals[i]}\n"
                             )
 
                     epoch += train_epochs_main
@@ -456,6 +457,8 @@ class Trainer:
         # rv_output = get_transformed_tensor(model.rv_output_ph, trainable_graph)
         # model_loss = get_transformed_tensor(model.loss, trainable_graph)
 
+        # tensorflow doesn't copy the custom gradients used by mixed_op_cat,
+        # so in this case we work with model graph directly:
         trainable_graph = model.graph
         model_input = model.input_placeholder
         rv_output = model.rv_output_ph
@@ -565,6 +568,7 @@ class Trainer:
             model,
             learning_strategy,
     ):
+        # TODO: there is no mixed_op on this stage, so we can safely copy model graph
         # trainable_graph = tf.compat.v1.Graph()
         # copy_graph(model.graph, trainable_graph)
         # model_input = get_transformed_tensor(model.input_placeholder, trainable_graph)
@@ -833,41 +837,6 @@ class Trainer:
 
             for X_train, Y_train in train_dataset:
 
-                # # TODO: TMP
-                # diag1, diag2, diag3, diag4 = session.run(
-                #     ['MixtureOutputLayer/MultivariateNormalDiagOutputLayer/diag/Add:0',
-                #      'MixtureOutputLayer/MultivariateNormalDiagOutputLayer_1/diag/Add:0',
-                #      'MixtureOutputLayer/MultivariateNormalTriLOutputLayer/diag/Add:0',
-                #      'MixtureOutputLayer/MultivariateNormalTriLOutputLayer_1/diag/Add:0'],
-                #     # ['MixtureOutputLayer/MultivariateNormalDiagOutputLayer/diag/Softplus:0',
-                #     #  'MixtureOutputLayer/MultivariateNormalDiagOutputLayer_1/diag/Softplus:0',
-                #     #  'MixtureOutputLayer/MultivariateNormalTriLOutputLayer/diag/Softplus:0',
-                #     #  'MixtureOutputLayer/MultivariateNormalTriLOutputLayer_1/diag/Softplus:0'],
-                #     feed_dict={
-                #         train_input_x: X_train,
-                #         train_input_y: Y_train,
-                #     })
-                # grads, loss = session.run(
-                #     [train_operations.gradients_, train_operations.loss],
-                #     feed_dict={
-                #         train_input_x: X_train,
-                #         train_input_y: Y_train,
-                #     })
-                # print(("*" * 100 + "\n") * 10)
-                # print(f"diag1: {np.min(diag1)}, {np.max(diag1)}")
-                # print(f"diag2: {np.min(diag2)}, {np.max(diag2)}")
-                # print(f"diag3: {np.min(diag3)}, {np.max(diag3)}")
-                # print(f"diag4: {np.min(diag4)}, {np.max(diag4)}")
-                # print(f"loss: {loss}")
-                # print()
-                # d = {}
-                # for grad, grad_val in zip(train_operations.gradients_, grads):
-                #     d[grad[1].name.replace(':0', '')] = grad_val[0]
-                # sorted_keys = sorted(d.keys())
-                # for key in sorted_keys:
-                #     print(f"{key}: {np.max(d[key]):.3f}, {np.min(d[key]):.3f}")
-                # # TODO: END OF TMP
-
                 result = _run_train_step(
                     train_operations=train_operations,
                     X=X_train,
@@ -878,13 +847,8 @@ class Trainer:
                 )
                 global_step = result['global_step']
 
-                # # TODO: TMP
-                # print(f"loss after step: {result['loss']}")
-                # # TODO: END OF TMP
-
                 # HANDLE NAN VALUES
                 if np.isnan(result['loss']):
-                    # return ''  # TODO: TMP
                     nans_step_counter = _handle_nans(nans_step_counter, global_step)
                     continue
 

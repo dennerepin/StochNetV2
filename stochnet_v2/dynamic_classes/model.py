@@ -33,7 +33,7 @@ class NASStochNet(StochNet):
         self.n_cells = body_config['n_cells']
         self.expansion_multiplier = body_config['expansion_multiplier']
         self.cell_size = body_config['cell_size']
-        self.n_summ_states = body_config['n_summ_states']
+        self.n_states_reduce = body_config['n_states_reduce']
 
         kernel_constraint = body_config.pop("kernel_constraint", "none")
         body_config["kernel_constraint"] = CONSTRAINTS_REGISTRY[kernel_constraint]
@@ -52,11 +52,11 @@ class NASStochNet(StochNet):
 
         return partial(_body_search, **body_config)
 
-    def save_genotypes(self, n_cells=None, cell_size=None, n_summ_states=None):
+    def save_genotypes(self, n_cells=None, cell_size=None, n_states_reduce=None):
         n_cells = n_cells or self.n_cells
         cell_size = cell_size or self.cell_size
-        n_summ_states = n_summ_states or self.n_summ_states
-        genotypes = get_genotypes(self.session, n_cells=n_cells, cell_size=cell_size, n_summ_states=n_summ_states)
+        n_states_reduce = n_states_reduce or self.n_states_reduce
+        genotypes = get_genotypes(self.session, n_cells=n_cells, cell_size=cell_size, n_states_reduce=n_states_reduce)
         with open(os.path.join(self.model_explorer.model_folder, 'genotypes.pickle'), 'wb') as f:
             pickle.dump(genotypes, f)
 

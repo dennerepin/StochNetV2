@@ -16,49 +16,59 @@ def cast_like(x, y):
     return cast_x
 
 
-def layer_norm_vars(filters):
-    """Create Variables for layer norm."""
-    scale = tf.get_variable("layer_norm_scale", [filters], initializer=tf.ones_initializer())
-    bias = tf.get_variable("layer_norm_bias", [filters], initializer=tf.zeros_initializer())
-    return scale, bias
-
-
-def layer_norm_compute(x, epsilon, scale, bias):
-    """Layer norm raw computation."""
-    params = (scale, bias)
-    epsilon, scale, bias = [cast_like(t, x) for t in [epsilon, scale, bias]]
-    mean = tf.reduce_mean(x, axis=[-1], keepdims=True)
-    variance = tf.reduce_mean(
-        tf.math.squared_difference(x, mean), axis=[-1], keepdims=True)
-    norm_x = (x - mean) * tf.math.rsqrt(variance + epsilon)
-    output = norm_x * scale + bias
-    return output
-
-
-def layer_norm(
-        x,
-        filters=None,
-        epsilon=1e-6,
-):
+def layer_norm(x, filters=None, epsilon=1e-6):
     """Layer normalize the tensor x, averaging over the last dimension."""
     if filters is None:
         filters = x.shape.as_list()[-1]
     with tf.variable_scope("layer_norm"):
-        scale, bias = layer_norm_vars(filters)
-        return layer_norm_compute(x, epsilon, scale, bias)
+        scale = tf.get_variable("layer_norm_scale", [filters], initializer=tf.ones_initializer())
+        bias = tf.get_variable("layer_norm_bias", [filters], initializer=tf.zeros_initializer())
+        epsilon, scale, bias = [cast_like(t, x) for t in [epsilon, scale, bias]]
+        mean = tf.reduce_mean(x, axis=[-1], keepdims=True)
+        variance = tf.reduce_mean(
+            tf.math.squared_difference(x, mean), axis=[-1], keepdims=True)
+        norm_x = (x - mean) * tf.math.rsqrt(variance + epsilon)
+        output = norm_x * scale + bias
+        return output
 
 
-def apply_norm(
-        x,
-        norm_type,
-        depth=None,
-        epsilon=None,
-):
+def noam_norm(x, epsilon=1.0, name=None):
+    """One version of layer normalization."""
+    with tf.name_scope(name, default_name="noam_norm", values=[x]):
+        shape = x.get_shape()
+        ndims = len(shape)
+        return (tf.nn.l2_normalize(x, ndims - 1, epsilon=epsilon)
+                * tf.sqrt(tf.cast(shape[-1], tf.float32)))
+
+
+def l2_norm(x, filters=None, epsilon=1e-6, name=None, reuse=None):
+    """Layer normalization with l2 norm."""
+    if filters is None:
+        filters = x.shape.as_list()[-1]
+    with tf.variable_scope(name, default_name="l2_norm", values=[x], reuse=reuse):
+        scale = tf.compat.v1.get_variable(
+            "l2_norm_scale", [filters], initializer=tf.ones_initializer())
+        bias = tf.compat.v1.get_variable(
+            "l2_norm_bias", [filters], initializer=tf.zeros_initializer())
+        epsilon, scale, bias = [cast_like(t, x) for t in [epsilon, scale, bias]]
+        mean = tf.reduce_mean(x, axis=[-1], keepdims=True)
+        l2norm = tf.reduce_sum(
+            tf.math.squared_difference(x, mean), axis=[-1], keepdims=True)
+        norm_x = (x - mean) * tf.math.rsqrt(l2norm + epsilon)
+        return norm_x * scale + bias
+
+
+def apply_norm(x, norm_type, depth=None, epsilon=None):
     """Apply Normalization."""
+    # TODO: add l1 norm
     if norm_type == "layer":
         return layer_norm(x, filters=depth, epsilon=epsilon)
     if norm_type == "batch":
         return tf.compat.v1.layers.BatchNormalization(epsilon=epsilon)(x)
+    if norm_type == "noam":
+        return noam_norm(x, epsilon)
+    if norm_type == "l2":
+        return l2_norm(x, filters=depth, epsilon=epsilon)
     if norm_type == "none":
         return x
     raise ValueError("Parameter normalizer_fn must be one of: 'layer', 'batch', 'none'.")

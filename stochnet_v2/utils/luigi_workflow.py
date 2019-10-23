@@ -219,18 +219,13 @@ class TrainSearch(ExternalProgramTask):
 
 @requires(GenerateHistogramData)
 @requires(TrainSearch)
+# @requires(TrainStatic)
 class Evaluate(ExternalProgramTask):
 
     distance_kind = luigi.Parameter(default='iou')
     target_species_names = luigi.Parameter(default='')
     time_lag_range = luigi.Parameter(default='10')
     settings_idxs_to_save_histograms = luigi.Parameter(default='0')
-
-    # def requires(self):
-    #     return [
-    #         GenerateHistogramData(),
-    #         TrainSearch()
-    #     ]
 
     def program_args(self):
         program_module = import_module("stochnet_v2.train.evaluate")
