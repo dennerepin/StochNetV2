@@ -3,7 +3,8 @@ import tensorflow as tf
 import tensorflow_probability as tfp
 
 from stochnet_v2.dynamic_classes.op_registry import OP_REGISTRY
-from stochnet_v2.dynamic_classes.op_registry import simple_dense as dense
+# from stochnet_v2.dynamic_classes.op_registry import simple_dense as expand_op
+from stochnet_v2.dynamic_classes.op_registry import _expand_identity as expand_op
 from stochnet_v2.dynamic_classes.genotypes import Genotype
 from stochnet_v2.dynamic_classes.genotypes import PRIMITIVES
 from stochnet_v2.dynamic_classes.util import expand_cell
@@ -109,10 +110,10 @@ def cell(
         curr_multiplier = expansion_multiplier if expand else 1
 
         with tf.variable_scope("state_0"):
-            s0 = dense(s0, prev_multiplier)
+            s0 = expand_op(s0, prev_multiplier)
 
         with tf.variable_scope("state_1"):
-            s1 = dense(s1, curr_multiplier)
+            s1 = expand_op(s1, curr_multiplier)
 
         state = [s0, s1]
 

@@ -328,7 +328,7 @@ def visualize_genotypes(genotypes, filename, view=False):
             g.node(f"C{cell_num}_s{i}", fillcolor='lightblue')
 
         for i in range(2):
-            op = "dense"
+            op = "expand_op"
             if i == 0:
                 u = v_pprev
             else:

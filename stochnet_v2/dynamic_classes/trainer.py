@@ -295,7 +295,7 @@ class Trainer:
                                 f"{v.name} \n"
                                 f"\t{v_val},  min={np.min(v_val):.3f}, max={np.max(v_val):.3f} -> \n"
                                 f"\t{v_softmax_val}, min={np.min(v_softmax_val):.3f}, max={np.max(v_softmax_val):.3f}, "
-                                f"reg_loss={arch_loss_vals[i]}\n"
+                                f"reg_loss={arch_loss_vals[i] if arch_loss_vals else 0}\n"
                             )
 
                     epoch += train_epochs_main
