@@ -10,6 +10,8 @@ from stochnet_v2.dataset.dataset import HDF5Dataset
 from stochnet_v2.utils.util import maybe_create_dir
 from stochnet_v2.utils.util import copy_graph
 from stochnet_v2.utils.util import get_transformed_tensor
+from stochnet_v2.dynamic_classes.nn_body_search import get_genotypes
+from stochnet_v2.utils.util import visualize_genotypes
 
 LOGGER = logging.getLogger('dynamic_classes.trainer')
 
@@ -157,8 +159,10 @@ class Trainer:
                 clear_train_dir = ckpt_path is None
                 tensorboard_log_dir = os.path.join(save_dir, 'tensorboard')
                 checkpoints_save_dir = os.path.join(save_dir, 'checkpoints')
+                genotypes_save_dir = os.path.join(save_dir, 'genotypes')
                 maybe_create_dir(tensorboard_log_dir, erase_existing=clear_train_dir)
                 maybe_create_dir(checkpoints_save_dir, erase_existing=clear_train_dir)
+                maybe_create_dir(genotypes_save_dir, erase_existing=clear_train_dir)
 
                 # savers:
                 regular_checkpoints_saver = tf.compat.v1.train.Saver(
@@ -297,6 +301,18 @@ class Trainer:
                                 f"\t{v_softmax_val}, min={np.min(v_softmax_val):.3f}, max={np.max(v_softmax_val):.3f}, "
                                 f"reg_loss={arch_loss_vals[i] if arch_loss_vals else 0}\n"
                             )
+
+                        genotypes = get_genotypes(
+                            session,
+                            model.n_cells,
+                            model.cell_size,
+                            model.n_states_reduce,
+                        )
+                        epoch_arch = training_state_arch[-1]
+                        visualize_genotypes(
+                            genotypes,
+                            os.path.join(genotypes_save_dir, f'epoch_{epoch_arch}_genotype')
+                        )
 
                     epoch += train_epochs_main
                     iteration += 1

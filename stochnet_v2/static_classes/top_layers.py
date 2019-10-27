@@ -21,8 +21,10 @@ initializer = tf.initializers.glorot_normal
 
 
 _DIAG_MIN = 0.01
-_DIAG_MAX = np.inf
-_SUB_DIAG_MAX = np.inf
+# _DIAG_MAX = np.inf
+# _SUB_DIAG_MAX = np.inf
+_DIAG_MAX = 1.0
+_SUB_DIAG_MAX = 1.0
 
 
 MIXTURE_COMPONENTS_REGISTRY = Registry(name='MixtureComponentsDescriptionsRegistry')

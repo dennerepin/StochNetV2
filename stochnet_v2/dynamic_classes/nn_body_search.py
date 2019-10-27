@@ -3,8 +3,8 @@ import tensorflow as tf
 import tensorflow_probability as tfp
 
 from stochnet_v2.dynamic_classes.op_registry import OP_REGISTRY
-# from stochnet_v2.dynamic_classes.op_registry import simple_dense as expand_op
-from stochnet_v2.dynamic_classes.op_registry import _expand_identity as expand_op
+from stochnet_v2.dynamic_classes.op_registry import simple_dense as expand_op
+# from stochnet_v2.dynamic_classes.op_registry import _expand_identity as expand_op
 from stochnet_v2.dynamic_classes.genotypes import Genotype
 from stochnet_v2.dynamic_classes.genotypes import PRIMITIVES
 from stochnet_v2.dynamic_classes.util import expand_cell
@@ -26,7 +26,7 @@ def mixed_op(x, expansion_coeff, **kwargs):
         )
 
         alphas = tf.nn.softmax(alphas)
-        alphas_reg_loss = - l2_regularizer(alphas, 1.0)
+        alphas_reg_loss = - l2_regularizer(alphas, float(len(PRIMITIVES)))
         tf.compat.v1.add_to_collection('architecture_regularization_losses', alphas_reg_loss)
 
     outputs = []
@@ -68,8 +68,10 @@ def mixed_op_cat(x, expansion_coeff, **kwargs):
             trainable=True,
         )
 
+        # alphas_reg_loss = l2_regularizer(alphas, 0.01)  # TODO
+
         alphas = tf.nn.softmax(alphas)
-        alphas_reg_loss = - l2_regularizer(alphas, 0.001)
+        alphas_reg_loss = - l2_regularizer(alphas, 0.01)
         tf.compat.v1.add_to_collection('architecture_regularization_losses', alphas_reg_loss)
 
     outputs = []
@@ -127,6 +129,7 @@ def cell(
                     # to perform the same way: layer activations are different
                     # because of weighted sum of op candidates;
                     # mixed_op_cat avoids this by picking only one edge per time
+                    # mix = mixed_op(state[j], expansion_coeff, **kwargs)
                     mix = mixed_op_cat(state[j], expansion_coeff, **kwargs)
                 tmp.append(mix)
 
