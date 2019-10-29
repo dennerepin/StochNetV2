@@ -7,7 +7,7 @@ PRIMITIVES = [
     'element_wise',
     'gated_linear_unit',
     'skip_connect',
-    'relu',
-    # 'swish',
+    # 'relu',
+    'swish',
     'none',
 ]

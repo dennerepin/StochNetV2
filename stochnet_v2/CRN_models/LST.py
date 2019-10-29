@@ -17,15 +17,15 @@ class LST(BaseCRNModel):
 
         self.N = 10 ** 9
 
-        on_rnap = gillespy.Parameter(name='on_rnap', expression=10 ** 4 / self.N)
+        on_rnap = gillespy.Parameter(name='on_rnap', expression=10 ** 6 / self.N)  # 10 ** 4 / self.N
         off_rnap = gillespy.Parameter(name='off_rnap', expression=1.6 * 0.01)
         on_rnap_if_a = gillespy.Parameter(name='on_rnap_if_a', expression=49 * 10 ** 4 / self.N)
-        on_r = gillespy.Parameter(name='on_r', expression=8.8 * 10 ** 7 / self.N)
-        off_r = gillespy.Parameter(name='off_r', expression=0.19)
+        on_r = gillespy.Parameter(name='on_r', expression=8.8 * 10 ** 6 / self.N)  # 8.8 * 10 ** 7 / self.N
+        off_r = gillespy.Parameter(name='off_r', expression=120.7)  # 0.19
         on_a = gillespy.Parameter(name='on_a', expression=8.8 * 10 ** 7 / self.N)
         off_a = gillespy.Parameter(name='off_a', expression=0.0264)
-        p_on = gillespy.Parameter(name='p_on', expression=0.5)
-        p_off = gillespy.Parameter(name='p_off', expression=0.001) #0.001
+        p_on = gillespy.Parameter(name='p_on', expression=3.5)  # 0.5
+        p_off = gillespy.Parameter(name='p_off', expression=0.0001)  #0.001
 
         self.add_parameter([on_rnap, off_rnap, on_rnap_if_a, on_r, off_r, on_a, off_a, p_on, p_off])
 
@@ -83,8 +83,8 @@ class LST(BaseCRNModel):
         )
         r_unbind_f = gillespy.Reaction(
             name='r_unbind_f',
-            reactants={DAR: 1},
-            products={DAU: 1, R: 1},
+            reactants={DFR: 1},
+            products={DFU: 1, R: 1},
             rate=off_r,
         )
         r_unbind_a = gillespy.Reaction(

@@ -1,8 +1,8 @@
 import tensorflow as tf
 
 from stochnet_v2.dynamic_classes.op_registry import OP_REGISTRY
-from stochnet_v2.dynamic_classes.op_registry import simple_dense as expand_op
-# from stochnet_v2.dynamic_classes.op_registry import _expand_identity as expand_op
+# from stochnet_v2.dynamic_classes.op_registry import simple_dense as expand_op
+from stochnet_v2.dynamic_classes.op_registry import _expand_identity as expand_op
 from stochnet_v2.dynamic_classes.util import expand_cell
 
 
