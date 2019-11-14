@@ -1,13 +1,13 @@
 from collections import namedtuple
 
-Genotype = namedtuple('Genotype', 'normal normal_summ expand expand_summ')
+Genotype = namedtuple('Genotype', 'normal normal_reduce expand expand_reduce')
 
 PRIMITIVES = [
     'simple_dense',
-    'dense_relu',
-    # 'bn_dense_relu',
-    # 'relu_dense_bn',
     'element_wise',
+    'gated_linear_unit',
     'skip_connect',
+    # 'relu',
+    'swish',
     'none',
 ]

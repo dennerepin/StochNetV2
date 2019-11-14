@@ -19,11 +19,12 @@ initializer = tf.initializers.glorot_normal
 # initializer = tf.compat.v1.initializers.variance_scaling(mode='fan_out', distribution="truncated_normal")
 # initializer = None
 
+
 _DIAG_MIN = 0.01
-# _EPS = 1e-3
-# _MAX = np.inf
-_DIAG_MAX = 1.0
-_SUB_DIAG_MAX = 1.0
+_DIAG_MAX = np.inf
+_SUB_DIAG_MAX = np.inf
+# _DIAG_MAX = 1.0
+# _SUB_DIAG_MAX = 1.0
 
 
 MIXTURE_COMPONENTS_REGISTRY = Registry(name='MixtureComponentsDescriptionsRegistry')
@@ -54,7 +55,6 @@ class RandomVariableOutputLayer(abc.ABC):
         self._sample_shape_placeholder = None
         self._sample_tensor = None
         self._sampling_graph = None
-        # self._session_hash = None
 
         self._sample_space_dimension = None
         self._number_of_output_neurons = None
@@ -173,15 +173,12 @@ class CategoricalOutputLayer(RandomVariableOutputLayer):
         self.hidden_size = hidden_size
         self._activation_fn = activation
         self._coeff_regularizer = coeff_regularizer
-        # self._coeff_regularizer = tf.keras.regularizers.l2(0.01)
-        # self._coeff_regularizer = lambda x: 0.001 * tf.compat.v1.nn.l2_loss(x)
 
         self._layer_params = {
             'kernel_constraint': kernel_constraint,
             'kernel_regularizer': kernel_regularizer,
             'bias_constraint': bias_constraint,
             'bias_regularizer': bias_regularizer,
-            # 'activity_regularizer': coeff_regularizer,
             'kernel_initializer': initializer,
         }
 
@@ -220,14 +217,11 @@ class CategoricalOutputLayer(RandomVariableOutputLayer):
                 self.number_of_output_neurons,
                 activation=None,
                 name='logits',
-                # activity_regularizer=self._coeff_regularizer,
                 **self._layer_params
             )(base)
 
             if self._coeff_regularizer:
                 apply_regularization(self._coeff_regularizer, logits)
-
-            # TODO: try clipping?
 
             return logits
 
@@ -275,7 +269,6 @@ class MultivariateNormalDiagOutputLayer(RandomVariableOutputLayer):
             'kernel_regularizer': kernel_regularizer,
             'bias_constraint': bias_constraint,
             'bias_regularizer': bias_regularizer,
-            # 'activity_regularizer': mu_regularizer,
             'kernel_initializer': initializer,
         }
         self._diag_layer_params = {
@@ -283,7 +276,6 @@ class MultivariateNormalDiagOutputLayer(RandomVariableOutputLayer):
             'kernel_regularizer': kernel_regularizer,
             'bias_constraint': bias_constraint,
             'bias_regularizer': bias_regularizer,
-            # 'activity_regularizer': diag_regularizer,
             'kernel_initializer': initializer,
         }
 
@@ -337,15 +329,13 @@ class MultivariateNormalDiagOutputLayer(RandomVariableOutputLayer):
                     self._sample_space_dimension,
                     activation=None,
                     name='mu',
-                    # activity_regularizer=self._mu_regularizer,
                     **self._mu_layer_params,
                 )(mu)
 
                 diag = Dense(
                     self._sample_space_dimension,
-                    activation=nn_elu_activation,  # or softplus_activation TODO
+                    activation=nn_elu_activation,  # or softplus_activation
                     name='diag',
-                    # activity_regularizer=self._diag_regularizer,
                     **self._diag_layer_params,
                 )(diag)
 
@@ -355,7 +345,7 @@ class MultivariateNormalDiagOutputLayer(RandomVariableOutputLayer):
                 if self._diag_regularizer:
                     apply_regularization(self._diag_regularizer, diag)
 
-                diag = tf.compat.v1.clip_by_value(diag, _DIAG_MIN, _DIAG_MAX)  # TODO
+                diag = tf.compat.v1.clip_by_value(diag, _DIAG_MIN, _DIAG_MAX)
 
                 return tf.concat([mu, diag], axis=-1)
 
@@ -381,11 +371,9 @@ class MultivariateNormalDiagOutputLayer(RandomVariableOutputLayer):
     def loss_function(self, y_true, y_pred):
         loss = - self.log_likelihood(y_true, y_pred)
         loss = tf.math.reduce_mean(loss)
-        # loss = tf.reshape(loss, [-1])
         return loss
 
     def log_likelihood(self, y_true, y_pred):
-        # TODO: check log-sum-exp trick?
         return self.get_random_variable(y_pred).log_prob(y_true)
 
 
@@ -420,7 +408,6 @@ class MultivariateNormalTriLOutputLayer(RandomVariableOutputLayer):
             'kernel_regularizer': kernel_regularizer,
             'bias_constraint': bias_constraint,
             'bias_regularizer': bias_regularizer,
-            # 'activity_regularizer': mu_regularizer,
             'kernel_initializer': initializer,
         }
         self._diag_layer_params = {
@@ -428,7 +415,6 @@ class MultivariateNormalTriLOutputLayer(RandomVariableOutputLayer):
             'kernel_regularizer': kernel_regularizer,
             'bias_constraint': bias_constraint,
             'bias_regularizer': bias_regularizer,
-            # 'activity_regularizer': diag_regularizer,
             'kernel_initializer': initializer,
         }
         self._sub_diag_layer_params = {
@@ -436,7 +422,6 @@ class MultivariateNormalTriLOutputLayer(RandomVariableOutputLayer):
             'kernel_regularizer': kernel_regularizer,
             'bias_constraint': bias_constraint,
             'bias_regularizer': bias_regularizer,
-            # 'activity_regularizer': sub_diag_regularizer,
             'kernel_initializer': initializer,
         }
 
@@ -499,15 +484,13 @@ class MultivariateNormalTriLOutputLayer(RandomVariableOutputLayer):
                     self._sample_space_dimension,
                     activation=None,
                     name='mu',
-                    # activity_regularizer=self._mu_regularizer,
                     **self._mu_layer_params,
                 )(mu)
 
                 diag = Dense(
                     self._sample_space_dimension,
-                    activation=nn_elu_activation,   # or softplus_activation TODO
+                    activation=nn_elu_activation,   # or softplus_activation
                     name='diag',
-                    # activity_regularizer=self._diag_regularizer,
                     **self._diag_layer_params,
                 )(diag)
 
@@ -515,7 +498,6 @@ class MultivariateNormalTriLOutputLayer(RandomVariableOutputLayer):
                     self._number_of_sub_diag_entries,
                     activation=None,
                     name='sub_diag',
-                    # activity_regularizer=self._sub_diag_regularizer,
                     **self._sub_diag_layer_params,
                 )(sub_diag)
 
@@ -528,8 +510,8 @@ class MultivariateNormalTriLOutputLayer(RandomVariableOutputLayer):
                 if self._sub_diag_regularizer:
                     apply_regularization(self._sub_diag_regularizer, sub_diag)
 
-                diag = tf.compat.v1.clip_by_value(diag, _DIAG_MIN, _DIAG_MAX)  # TODO
-                sub_diag = tf.compat.v1.clip_by_value(sub_diag, -_SUB_DIAG_MAX, _SUB_DIAG_MAX)  # TODO
+                diag = tf.compat.v1.clip_by_value(diag, _DIAG_MIN, _DIAG_MAX)
+                sub_diag = tf.compat.v1.clip_by_value(sub_diag, -_SUB_DIAG_MAX, _SUB_DIAG_MAX)
 
                 return tf.concat([mu, diag, sub_diag], axis=-1)
 
@@ -572,7 +554,6 @@ class MultivariateNormalTriLOutputLayer(RandomVariableOutputLayer):
     def loss_function(self, y_true, y_pred):
         loss = - self.log_likelihood(y_true, y_pred)
         loss = tf.math.reduce_mean(loss)
-        # loss = tf.reshape(loss, [-1])
         return loss
 
     def log_likelihood(self, y_true, y_pred):
@@ -754,7 +735,6 @@ class MixtureOutputLayer(RandomVariableOutputLayer):
     def loss_function(self, y_true, y_pred):
         loss = - self.log_likelihood(y_true, y_pred)
         loss = tf.math.reduce_mean(loss)
-        # loss = tf.reshape(loss, [-1])
         return loss
 
     def log_likelihood(self, y_true, y_pred):

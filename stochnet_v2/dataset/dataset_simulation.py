@@ -118,6 +118,7 @@ def perform_simulations(
     )
 
     pool.starmap(task, kwargs)
+    pool.close()
     return
 
 

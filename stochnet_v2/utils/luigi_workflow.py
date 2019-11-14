@@ -1,10 +1,14 @@
 import logging
 import luigi
+import os
+import sys
 from luigi.contrib.external_program import ExternalProgramTask
 from luigi.util import inherits, requires
 from importlib import import_module
-import sys
-sys.path.append('/home/dn/Documents/StochNetV2/')
+
+path = os.path.dirname(__file__)
+sys.path.append(os.path.join(path, '../..'))
+# sys.path.append('/home/dn/Documents/StochNetV2/')
 from stochnet_v2.utils.file_organisation import ProjectFileExplorer
 
 logger = logging.getLogger('root')
@@ -217,8 +221,6 @@ class TrainSearch(ExternalProgramTask):
         ]
 
 
-@requires(GenerateHistogramData)
-@requires(TrainSearch)
 class Evaluate(ExternalProgramTask):
 
     distance_kind = luigi.Parameter(default='iou')
@@ -226,11 +228,18 @@ class Evaluate(ExternalProgramTask):
     time_lag_range = luigi.Parameter(default='10')
     settings_idxs_to_save_histograms = luigi.Parameter(default='0')
 
-    # def requires(self):
-    #     return [
-    #         GenerateHistogramData(),
-    #         TrainSearch()
-    #     ]
+    model_id = luigi.IntParameter()
+    project_folder = luigi.Parameter()
+    timestep = luigi.FloatParameter()
+    dataset_id = luigi.IntParameter()
+    model_name = luigi.Parameter()
+    nb_past_timesteps = luigi.IntParameter()
+
+    def requires(self):
+        return [
+            GenerateHistogramData(),
+            TrainSearch()
+        ]
 
     def program_args(self):
         program_module = import_module("stochnet_v2.train.evaluate")

@@ -53,15 +53,6 @@ def main():
     model_name = args.model_name
     random_seed = args.random_seed
 
-    # project_folder = str(sys.argv[1])
-    # timestep = float(sys.argv[2])
-    # dataset_id = int(sys.argv[3])
-    # nb_settings = int(sys.argv[4])
-    # nb_trajectories = int(sys.argv[5])
-    # endtime = float(sys.argv[6])
-    # model_name = str(sys.argv[7])
-    # random_seed = int(sys.argv[8])
-
     start = time()
 
     np.random.seed(random_seed)

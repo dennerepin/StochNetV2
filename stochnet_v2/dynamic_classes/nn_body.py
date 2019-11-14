@@ -1,10 +1,8 @@
 import tensorflow as tf
 
 from stochnet_v2.dynamic_classes.op_registry import OP_REGISTRY
-from stochnet_v2.dynamic_classes.op_registry import simple_dense as dense  # TODO: ?
-# from stochnet_v2.dynamic_classes.op_registry import dense_relu as dense  # TODO: ?
-# from stochnet_v2.dynamic_classes.op_registry import bn_dense_relu as dense  # TODO: ?
-# from stochnet_v2.dynamic_classes.op_registry import relu_dense_bn as dense  # TODO: ?
+# from stochnet_v2.dynamic_classes.op_registry import simple_dense as expand_op
+from stochnet_v2.dynamic_classes.op_registry import _expand_identity as expand_op
 from stochnet_v2.dynamic_classes.util import expand_cell
 
 
@@ -19,10 +17,10 @@ def cell(
 ):
     if expand:
         op_names, indices = zip(*genotype.expand)
-        states_summ = genotype.expand_summ
+        states_reduce = genotype.expand_reduce
     else:
         op_names, indices = zip(*genotype.normal)
-        states_summ = genotype.normal_summ
+        states_reduce = genotype.normal_reduce
 
     cell_size = len(op_names) // 2
 
@@ -37,10 +35,10 @@ def cell(
         curr_multiplier = expansion_multiplier if expand else 1
 
         with tf.variable_scope("state_0"):
-            s0 = dense(s0, prev_multiplier)
+            s0 = expand_op(s0, prev_multiplier)
 
         with tf.variable_scope("state_1"):
-            s1 = dense(s1, curr_multiplier)
+            s1 = expand_op(s1, curr_multiplier)
 
         state = [s0, s1]
 
@@ -51,7 +49,6 @@ def cell(
             for j in range(2):
                 genotype_idx = 2 * i + j
                 input_state_idx = indices[genotype_idx]
-                # expansion_coeff = expansion_multiplier if expand and input_state_idx < 2 else 1
                 expansion_coeff = 1
 
                 s = state[input_state_idx]
@@ -70,20 +67,20 @@ def cell(
                 state.append(-1)
 
         # out = next((x for x in state[::-1] if x != -1), s0 + s1)
-        summ_candidates = []
-        for idx in states_summ:
+        reduce_candidates = []
+        for idx in states_reduce:
             candidate = state[idx]
             if candidate != -1:
-                summ_candidates.append(candidate)
-        if len(summ_candidates) == 0:
-            summ_candidates = [s0, s1]
+                reduce_candidates.append(candidate)
+        if len(reduce_candidates) == 0:
+            reduce_candidates = [s0, s1]
 
-        out = tf.compat.v1.add_n(summ_candidates)
+        out = tf.compat.v1.reduce_mean(reduce_candidates, 0)
 
     return out
 
 
-def body(x, genotypes, expansion_multiplier=4):
+def body(x, genotypes, expansion_multiplier):
     n_cells = len(genotypes)
     # out_dim = x.shape.as_list()[-1]
     # s0 = tf.compat.v1.layers.Dense(out_dim, activation='relu')(x)

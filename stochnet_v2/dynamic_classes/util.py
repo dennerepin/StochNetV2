@@ -1,9 +1,24 @@
 import tensorflow as tf
 from stochnet_v2.utils.util import apply_regularization
+from stochnet_v2.utils.layer_prepostprocess import layer_preprocess
+from stochnet_v2.utils.layer_prepostprocess import layer_postprocess
+from stochnet_v2.utils.registry import ACTIVATIONS_REGISTRY
 
 initializer = tf.initializers.glorot_normal
 # initializer = tf.compat.v1.initializers.variance_scaling(mode='fan_out', distribution="truncated_normal")
 # initializer = None
+
+
+def preprocess(layer_input):
+    return layer_preprocess(layer_input, 'none', 0.1, 'layer', 1e-4)  # 'none'
+
+
+def postprocess(layer_output):
+    return layer_postprocess(0., layer_output, 'n', 0.1, 'l2', 1e-4)  # 'n'
+
+
+# def postprocess_residual(layer_input, layer_output):
+#     return layer_postprocess(layer_input, layer_output, 'n', 0.1, 'layer', 1e-4)  # 'an'
 
 
 def expand_cell(n, n_cells):
@@ -38,6 +53,8 @@ def l1_regularizer(x, scale=0.01):
 
 
 def _expand_identity(x, expansion_coeff, **kwargs):
+    if expansion_coeff == 1:
+        return tf.compat.v1.identity(x)
     with tf.compat.v1.variable_scope('expansion_identity'):
         n_dims = x.shape.ndims
         x_shape = x.shape.as_list()
@@ -86,10 +103,15 @@ def _expand_element_wise(
                 regularizer=bias_regularizer,
                 trainable=True,
             )
+        residual = x
+        x = preprocess(x)
 
         x = tf.compat.v1.multiply(x, kernel) + bias
         if activity_regularizer:
             apply_regularization(activity_regularizer, x)
+
+        # x = postprocess_residual(residual, x)
+        x = postprocess(x)
 
     return x
 
@@ -107,35 +129,9 @@ def _simple_dense(
         **kwargs,
 ):
     n_units = x.shape.as_list()[-1] * expansion_coeff
-    x = tf.compat.v1.layers.Dense(
-        n_units,
-        kernel_initializer=kernel_initializer,
-        kernel_constraint=kernel_constraint,
-        kernel_regularizer=kernel_regularizer,
-        bias_initializer=bias_initializer,
-        bias_constraint=bias_constraint,
-        bias_regularizer=bias_regularizer,
-    )(x)
-    if activity_regularizer:
-        apply_regularization(activity_regularizer, x)
 
-    return x
-
-
-def _dense_relu(
-        x,
-        expansion_coeff,
-        kernel_initializer=initializer,
-        kernel_constraint=None,
-        kernel_regularizer=None,
-        bias_initializer=tf.compat.v1.initializers.zeros,
-        bias_constraint=None,
-        bias_regularizer=None,
-        activity_regularizer=None,
-        **kwargs,
-):
-    n_units = x.shape.as_list()[-1] * expansion_coeff
-    with tf.variable_scope("DenseRelu"):
+    with tf.variable_scope("Dense"):
+        x = preprocess(x)
         x = tf.compat.v1.layers.Dense(
             n_units,
             kernel_initializer=kernel_initializer,
@@ -148,13 +144,15 @@ def _dense_relu(
         if activity_regularizer:
             apply_regularization(activity_regularizer, x)
 
-        x = tf.compat.v1.nn.relu(x)
+        x = postprocess(x)
+
     return x
 
 
-def _bn_dense_relu(
+def _activated_dense(
         x,
         expansion_coeff,
+        activation_type,
         kernel_initializer=initializer,
         kernel_constraint=None,
         kernel_regularizer=None,
@@ -165,8 +163,9 @@ def _bn_dense_relu(
         **kwargs,
 ):
     n_units = x.shape.as_list()[-1] * expansion_coeff
-    with tf.variable_scope("BNDenseRelu"):
-        x = tf.compat.v1.layers.BatchNormalization()(x)
+
+    with tf.variable_scope("ActivatedDense"):
+        x = preprocess(x)
         x = tf.compat.v1.layers.Dense(
             n_units,
             kernel_initializer=kernel_initializer,
@@ -179,11 +178,14 @@ def _bn_dense_relu(
         if activity_regularizer:
             apply_regularization(activity_regularizer, x)
 
-        x = tf.compat.v1.nn.relu(x)
+        activation_fn = ACTIVATIONS_REGISTRY[activation_type]
+        x = activation_fn(x)
+        x = postprocess(x)
+
     return x
 
 
-def _relu_dense_bn(
+def _gated_linear_unit(
         x,
         expansion_coeff,
         kernel_initializer=initializer,
@@ -196,9 +198,15 @@ def _relu_dense_bn(
         **kwargs,
 ):
     n_units = x.shape.as_list()[-1] * expansion_coeff
-    with tf.variable_scope("ReluDenseBN"):
-        x = tf.compat.v1.nn.relu(x)
-        x = tf.compat.v1.layers.Dense(
+
+    with tf.variable_scope("GatedLinearUnit"):
+        if expansion_coeff > 1:
+            residual = _expand_identity(x, expansion_coeff)
+        else:
+            residual = x
+        x = preprocess(x)
+
+        values = tf.compat.v1.layers.Dense(
             n_units,
             kernel_initializer=kernel_initializer,
             kernel_constraint=kernel_constraint,
@@ -207,8 +215,19 @@ def _relu_dense_bn(
             bias_constraint=bias_constraint,
             bias_regularizer=bias_regularizer,
         )(x)
-        if activity_regularizer:
-            apply_regularization(activity_regularizer, x)
+        gates = tf.compat.v1.layers.Dense(
+            n_units,
+            kernel_initializer=kernel_initializer,
+            kernel_constraint=kernel_constraint,
+            kernel_regularizer=kernel_regularizer,
+            bias_initializer=bias_initializer,
+            bias_constraint=bias_constraint,
+            bias_regularizer=bias_regularizer,
+        )(x)
+        gates = tf.nn.sigmoid(gates)
+        x = values * gates
 
-        x = tf.compat.v1.layers.BatchNormalization()(x)
+        # x = postprocess_residual(residual, x)
+        x = postprocess(x)
+
     return x

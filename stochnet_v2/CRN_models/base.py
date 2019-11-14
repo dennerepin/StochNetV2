@@ -23,8 +23,9 @@ class BaseCRNModel(gillespy.Model):
         self.timespan(np.linspace(0, endtime, nb_of_steps))
 
     def set_species_initial_value(self, species_initial_value):
-        for s_name in self.species:
-            idx = self.species.index(s_name)
+        species_names = self.get_species_names()
+        for s_name in species_names:
+            idx = species_names.index(s_name)
             self.listOfSpecies[s_name].initial_value = species_initial_value[idx]
 
     def get_species_values(self):
@@ -69,7 +70,7 @@ class BaseCRNModel(gillespy.Model):
         return histogram_bounds
 
 
-class SBMLModel(BaseCRNModel):
+class BaseSBMLModel(BaseCRNModel):
 
     def __init__(
             self,

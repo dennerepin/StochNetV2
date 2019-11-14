@@ -17,31 +17,6 @@ BODY_FN_REGISTRY = Registry(name="BodyFunctionsRegistry")
 BLOCKS_REGISTRY = Registry(name="ResidualBlocksRegistry")
 
 
-# def dummy_body(input_tensor):
-#     shape = input_tensor.shape.as_list()
-#     # x = tf.keras.layers.Reshape((np.prod(shape[1:]),))(input_tensor)
-#     x = tf.reshape(input_tensor, (np.prod(shape[1:]),))
-#     x = Dense(500, activation='relu')(x)
-#     return x
-
-
-# @BLOCKS_REGISTRY.register("a")
-# def _block_a(
-#         x,
-#         hidden_size,
-#         activation,
-#         params_dict,
-# ):
-#     h1 = Dense(hidden_size, **params_dict)(x)
-#     h1 = activation(h1)
-#
-#     h2 = Dense(hidden_size, **params_dict)(h1)
-#     h2 = activation(h2)
-#
-#     h2 = tf.add(h1, h2)
-#     return h2
-
-
 @BLOCKS_REGISTRY.register("a")
 def block_a(
         x,
@@ -176,23 +151,14 @@ def body_lstm(
         params_dict,
 ):
     if n_blocks == 1:
-        # output = tf.keras.layers.LSTM(hidden_size)(x)
-        # cell = tf.keras.layers.LSTMCell(hidden_size)
-
-        # cell = tf.compat.v1.nn.rnn_cell.LSTMCell(hidden_size)
-        # cell = tf.compat.v1.nn.rnn_cell.GRUCell(hidden_size)
         cell = block_fn(hidden_size)
     else:
         cells = [
-            # tf.compat.v1.nn.rnn_cell.LSTMCell(hidden_size)
-            # tf.compat.v1.nn.rnn_cell.GRUCell(hidden_size)
             block_fn(hidden_size)
             for _ in range(n_blocks)
         ]
-        # cell = tf.keras.layers.StackedRNNCells(cells)
         cell = tf.compat.v1.nn.rnn_cell.MultiRNNCell(cells)
 
-    # output = tf.keras.layers.RNN(cell)(x)  # Produces error with convert_variables_to_constants (bad name-scopes)
     output, state = tf.compat.v1.nn.dynamic_rnn(cell, x, dtype=tf.float32)
     output = output[:, -1, :]
     return output
@@ -232,7 +198,7 @@ def body_main(
         'kernel_regularizer': REGULARIZERS_REGISTRY[kernel_regularizer],
         'bias_constraint': CONSTRAINTS_REGISTRY[bias_constraint],
         'bias_regularizer': REGULARIZERS_REGISTRY[bias_regularizer],
-        'kernel_initializer': initializer,  # TODO
+        'kernel_initializer': initializer,
     }
     body_fn = BODY_FN_REGISTRY[body_fn_name]
     block_fn = BLOCKS_REGISTRY[block_name]

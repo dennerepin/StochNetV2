@@ -10,6 +10,8 @@ from stochnet_v2.dataset.dataset import HDF5Dataset
 from stochnet_v2.utils.util import maybe_create_dir
 from stochnet_v2.utils.util import copy_graph
 from stochnet_v2.utils.util import get_transformed_tensor
+from stochnet_v2.dynamic_classes.nn_body_search import get_genotypes
+from stochnet_v2.utils.util import visualize_genotypes
 
 LOGGER = logging.getLogger('dynamic_classes.trainer')
 
@@ -61,15 +63,15 @@ Summaries = namedtuple(
 )
 
 
-_MINIMAL_LEARNING_RATE = 1 * 10 ** - 7
+_MINIMAL_LEARNING_RATE = 10 ** - 7
 _NUMBER_OF_REGULAR_CHECKPOINTS = 10
 _NUMBER_OF_BEST_LOSS_CHECKPOINTS = 5
 _REGULAR_CHECKPOINTS_DELTA = 1000
 _DEFAULT_NUMBER_OF_EPOCHS_MAIN = 100
-_DEFAULT_NUMBER_OF_EPOCHS_HEAT_UP = 10
+_DEFAULT_NUMBER_OF_EPOCHS_HEAT_UP = 20
 _DEFAULT_N_EPOCHS_INTERVAL = 5
 _DEFAULT_NUMBER_OF_EPOCHS_ARCH = 5
-_DEFAULT_BATCH_SIZE = 1024
+_DEFAULT_BATCH_SIZE = 256
 _DEFAULT_PREFETCH_SIZE = 10
 _DEFAULT_MOMENTUM = 0.9
 
@@ -157,8 +159,10 @@ class Trainer:
                 clear_train_dir = ckpt_path is None
                 tensorboard_log_dir = os.path.join(save_dir, 'tensorboard')
                 checkpoints_save_dir = os.path.join(save_dir, 'checkpoints')
+                genotypes_save_dir = os.path.join(save_dir, 'genotypes')
                 maybe_create_dir(tensorboard_log_dir, erase_existing=clear_train_dir)
                 maybe_create_dir(checkpoints_save_dir, erase_existing=clear_train_dir)
+                maybe_create_dir(genotypes_save_dir, erase_existing=clear_train_dir)
 
                 # savers:
                 regular_checkpoints_saver = tf.compat.v1.train.Saver(
@@ -293,9 +297,22 @@ class Trainer:
                             v_val, v_softmax_val = session.run([v, v_softmax_name])
                             print(
                                 f"{v.name} \n"
-                                f"\t{v_val} -> \n"
-                                f"\t{v_softmax_val}, reg_loss={arch_loss_vals[i]} \n"
+                                f"\t{v_val},  min={np.min(v_val):.3f}, max={np.max(v_val):.3f} -> \n"
+                                f"\t{v_softmax_val}, min={np.min(v_softmax_val):.3f}, max={np.max(v_softmax_val):.3f}, "
+                                f"reg_loss={arch_loss_vals[i] if arch_loss_vals else 0}\n"
                             )
+
+                        genotypes = get_genotypes(
+                            session,
+                            model.n_cells,
+                            model.cell_size,
+                            model.n_states_reduce,
+                        )
+                        epoch_arch = training_state_arch[-1]
+                        visualize_genotypes(
+                            genotypes,
+                            os.path.join(genotypes_save_dir, f'epoch_{epoch_arch}_genotype')
+                        )
 
                     epoch += train_epochs_main
                     iteration += 1
@@ -456,6 +473,8 @@ class Trainer:
         # rv_output = get_transformed_tensor(model.rv_output_ph, trainable_graph)
         # model_loss = get_transformed_tensor(model.loss, trainable_graph)
 
+        # tensorflow doesn't copy the custom gradients used by mixed_op_cat,
+        # so in this case we work with model graph directly:
         trainable_graph = model.graph
         model_input = model.input_placeholder
         rv_output = model.rv_output_ph
@@ -565,6 +584,7 @@ class Trainer:
             model,
             learning_strategy,
     ):
+        # TODO: there is no mixed_op on this stage, so we can safely copy model graph
         # trainable_graph = tf.compat.v1.Graph()
         # copy_graph(model.graph, trainable_graph)
         # model_input = get_transformed_tensor(model.input_placeholder, trainable_graph)
@@ -833,41 +853,6 @@ class Trainer:
 
             for X_train, Y_train in train_dataset:
 
-                # # TODO: TMP
-                # diag1, diag2, diag3, diag4 = session.run(
-                #     ['MixtureOutputLayer/MultivariateNormalDiagOutputLayer/diag/Add:0',
-                #      'MixtureOutputLayer/MultivariateNormalDiagOutputLayer_1/diag/Add:0',
-                #      'MixtureOutputLayer/MultivariateNormalTriLOutputLayer/diag/Add:0',
-                #      'MixtureOutputLayer/MultivariateNormalTriLOutputLayer_1/diag/Add:0'],
-                #     # ['MixtureOutputLayer/MultivariateNormalDiagOutputLayer/diag/Softplus:0',
-                #     #  'MixtureOutputLayer/MultivariateNormalDiagOutputLayer_1/diag/Softplus:0',
-                #     #  'MixtureOutputLayer/MultivariateNormalTriLOutputLayer/diag/Softplus:0',
-                #     #  'MixtureOutputLayer/MultivariateNormalTriLOutputLayer_1/diag/Softplus:0'],
-                #     feed_dict={
-                #         train_input_x: X_train,
-                #         train_input_y: Y_train,
-                #     })
-                # grads, loss = session.run(
-                #     [train_operations.gradients_, train_operations.loss],
-                #     feed_dict={
-                #         train_input_x: X_train,
-                #         train_input_y: Y_train,
-                #     })
-                # print(("*" * 100 + "\n") * 10)
-                # print(f"diag1: {np.min(diag1)}, {np.max(diag1)}")
-                # print(f"diag2: {np.min(diag2)}, {np.max(diag2)}")
-                # print(f"diag3: {np.min(diag3)}, {np.max(diag3)}")
-                # print(f"diag4: {np.min(diag4)}, {np.max(diag4)}")
-                # print(f"loss: {loss}")
-                # print()
-                # d = {}
-                # for grad, grad_val in zip(train_operations.gradients_, grads):
-                #     d[grad[1].name.replace(':0', '')] = grad_val[0]
-                # sorted_keys = sorted(d.keys())
-                # for key in sorted_keys:
-                #     print(f"{key}: {np.max(d[key]):.3f}, {np.min(d[key]):.3f}")
-                # # TODO: END OF TMP
-
                 result = _run_train_step(
                     train_operations=train_operations,
                     X=X_train,
@@ -878,13 +863,8 @@ class Trainer:
                 )
                 global_step = result['global_step']
 
-                # # TODO: TMP
-                # print(f"loss after step: {result['loss']}")
-                # # TODO: END OF TMP
-
                 # HANDLE NAN VALUES
                 if np.isnan(result['loss']):
-                    # return ''  # TODO: TMP
                     nans_step_counter = _handle_nans(nans_step_counter, global_step)
                     continue
 
