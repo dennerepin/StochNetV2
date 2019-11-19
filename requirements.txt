@@ -1,8 +1,12 @@
+bidict
+gillespy
 graphviz
+h5py
+libsbml
 luigi
-gillespy==1.1
-h5py==2.9.0
-matplotlib==3.1.0
-numpy==1.16.4
-tensorflow-gpu==1.14.0
+matplotlib
+numpy>=1.16
+scikit-learn
+tensorflow==1.14
 tensorflow-probability==0.7.0
+tqdm

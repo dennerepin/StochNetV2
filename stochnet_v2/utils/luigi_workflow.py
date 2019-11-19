@@ -1,15 +1,11 @@
 import logging
 import luigi
-import os
-import sys
 from luigi.contrib.external_program import ExternalProgramTask
 from luigi.util import inherits, requires
 from importlib import import_module
 
-path = os.path.dirname(__file__)
-sys.path.append(os.path.join(path, '../..'))
-# sys.path.append('/home/dn/Documents/StochNetV2/')
 from stochnet_v2.utils.file_organisation import ProjectFileExplorer
+
 
 logger = logging.getLogger('root')
 
@@ -33,7 +29,7 @@ class GenerateDataset(ExternalProgramTask):
     nb_trajectories = luigi.IntParameter()
 
     def program_args(self):
-        program_module = import_module("stochnet_v2.dataset.dataset_simulation")
+        program_module = import_module("stochnet_v2.scripts.simulate_data")
         program_address = program_module.__file__
         return [
             'python',
@@ -66,7 +62,7 @@ class FormatDataset(ExternalProgramTask):
     save_format = luigi.Parameter()
 
     def program_args(self):
-        program_module = import_module("stochnet_v2.dataset.format_dataset")
+        program_module = import_module("stochnet_v2.scripts.format_data_for_training")
         program_address = program_module.__file__
         return [
             'python',
@@ -102,7 +98,7 @@ class GenerateHistogramData(ExternalProgramTask):
     histogram_endtime = luigi.FloatParameter()
 
     def program_args(self):
-        program_module = import_module("stochnet_v2.dataset.histogram_dataset_simulation")
+        program_module = import_module("stochnet_v2.scripts.simulate_histogram_data")
         program_address = program_module.__file__
         return [
             'python',
@@ -140,7 +136,7 @@ class TrainStatic(ExternalProgramTask):
     stddev = luigi.FloatParameter(default=0.01)
 
     def program_args(self):
-        program_module = import_module("stochnet_v2.train.train_static")
+        program_module = import_module("stochnet_v2.scripts.train_static")
         program_address = program_module.__file__
         return [
             'python',
@@ -187,7 +183,7 @@ class TrainSearch(ExternalProgramTask):
     stddev = luigi.FloatParameter(default=0.01)
 
     def program_args(self):
-        program_module = import_module("stochnet_v2.train.train_search")
+        program_module = import_module("stochnet_v2.scripts.train_search")
         program_address = program_module.__file__
         return [
             'python',
@@ -242,7 +238,7 @@ class Evaluate(ExternalProgramTask):
         ]
 
     def program_args(self):
-        program_module = import_module("stochnet_v2.train.evaluate")
+        program_module = import_module("stochnet_v2.scripts.evaluate")
         program_address = program_module.__file__
         return [
             'python',

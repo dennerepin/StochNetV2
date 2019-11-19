@@ -6,10 +6,17 @@ from stochnet_v2.CRN_models.base import BaseCRNModel
 
 
 class Gene(BaseCRNModel):
+    """Class for gene regulatory network."""
 
     def __init__(self, endtime, timestep):
+        """
+        Initialize the model.
 
-        # Initialize the model.
+        Parameters
+        ----------
+        endtime : endtime of simulations
+        timestep : time-step of simulations
+        """
         super().__init__(
             endtime=endtime,
             timestep=timestep,
@@ -67,6 +74,20 @@ class Gene(BaseCRNModel):
         self.timespan(np.linspace(0, endtime, nb_of_steps))
 
     def set_species_initial_value(self, species_initial_value):
+        """
+        Set initial values to species.
+
+        Parameters
+        ----------
+        species_initial_value : list or 1d array of values, size should be equal
+            to the number of species, the order should be coherent with theo order
+            of species returned by get_initial_state method.
+
+        Returns
+        -------
+        None
+
+        """
         self.listOfSpecies['G0'].initial_value = species_initial_value[0]
         self.listOfSpecies['G1'].initial_value = species_initial_value[1]
         self.listOfSpecies['M'].initial_value = species_initial_value[2]
@@ -74,14 +95,37 @@ class Gene(BaseCRNModel):
 
     @staticmethod
     def get_species_names():
+        """
+        Returns list of species names.
+
+        Returns
+        -------
+        list of all species names. The order of names should be coherent
+        with the list returned by get_initial_state method.
+
+        """
         return ['G0', 'G1', 'M', 'P']
 
     @classmethod
     def get_n_species(cls):
+        """Total number of species."""
         return len(cls.get_species_names())
 
     @classmethod
-    def get_initial_settings(cls, n_settings, _=None):
+    def get_initial_settings(cls, n_settings, sigm=None):
+        """
+        Generate a set of (random) initial states.
+
+        Parameters
+        ----------
+        n_settings : number of settings to produce.
+        sigm : not used
+
+        Returns
+        -------
+        array of n_settings initial states
+
+        """
         G0 = np.random.randint(low=0, high=2, size=(n_settings, 1))
         G1 = np.ones_like(G0, dtype=float) - G0
         M = np.random.randint(low=0, high=6, size=(n_settings, 1))
@@ -91,10 +135,30 @@ class Gene(BaseCRNModel):
 
     @classmethod
     def get_histogram_bounds(cls, species_names_list=None):
+        """
+        Returns bounds for species histograms.
+
+        Parameters
+        ----------
+        species_names_list: not used
+
+        Returns
+        -------
+        histogram_bounds: list of [min, max] values for species
+
+        """
         n_species_for_histogram = len(cls.get_species_for_histogram())
         histogram_bounds = [[0.5, 1800.5]] * n_species_for_histogram
         return histogram_bounds
 
     @staticmethod
     def get_species_for_histogram():
+        """
+        Returns subset of species of interest.
+
+        Returns
+        -------
+        list of species names.
+
+        """
         return ['P']

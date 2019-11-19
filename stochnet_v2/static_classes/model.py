@@ -10,7 +10,7 @@ from functools import partial
 from sklearn.preprocessing.data import StandardScaler, MinMaxScaler
 from tqdm import tqdm
 
-from stochnet_v2.static_classes import nn_bodies
+import stochnet_v2.static_classes.nn_bodies as nn_bodies
 from stochnet_v2.static_classes.top_layers import MixtureOutputLayer
 from stochnet_v2.static_classes.top_layers import MIXTURE_COMPONENTS_REGISTRY
 from stochnet_v2.utils.file_organisation import ProjectFileExplorer

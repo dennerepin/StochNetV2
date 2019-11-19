@@ -1,8 +1,10 @@
 import argparse
-import os
-import sys
 import numpy as np
 from time import time
+
+from stochnet_v2.utils.file_organisation import ProjectFileExplorer
+from stochnet_v2.dataset.dataset import DataTransformer
+from stochnet_v2.utils.util import str_to_bool
 
 
 def main():
@@ -16,12 +18,6 @@ def main():
     parser.add_argument('--save_format', type=str, default='hdf5', choices=['hdf5', 'tfrecord'])
     parser.add_argument('--random_seed', type=int, default=23)
     args = parser.parse_args()
-
-    path = os.path.dirname(__file__)
-    sys.path.append(os.path.join(path, '../..'))
-    from stochnet_v2.utils.file_organisation import ProjectFileExplorer
-    from stochnet_v2.dataset.dataset import DataTransformer
-    from stochnet_v2.utils.util import str_to_bool
 
     project_folder = args.project_folder
     timestep = args.timestep
@@ -90,7 +86,7 @@ if __name__ == '__main__':
 
 
 """
-python stochnet_v2/dataset/format_dataset.py \
+python stochnet_v2/scripts/format_data_for_training.py \
        --project_folder='/home/dn/DATA/EGFR' \
        --timestep=0.2 \
        --dataset_id=1 \

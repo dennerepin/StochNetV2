@@ -1,14 +1,11 @@
 import argparse
 import os
-import sys
+
+from stochnet_v2.utils.evaluation import evaluate
+from stochnet_v2.utils.file_organisation import ProjectFileExplorer
 
 
 def main():
-    path = os.path.dirname(__file__)
-    sys.path.append(os.path.join(path, '../..'))
-    from stochnet_v2.utils.evaluation import evaluate
-    from stochnet_v2.utils.file_organisation import ProjectFileExplorer
-
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
     parser = argparse.ArgumentParser()
@@ -66,11 +63,11 @@ if __name__ == "__main__":
 
 
 """
-python stochnet_v2/train/evaluate.py \
+python stochnet_v2/scripts/evaluate.py \
     --project_folder='/home/dn/DATA/EGFR' \
-    --timestep=0.3 \
+    --timestep=0.2 \
     --dataset_id=1 \
-    --model_id=1 \
+    --model_id=2 \
     --model_name='EGFR' \
     --nb_past_timesteps=1 \
     --distance_kind='iou' \

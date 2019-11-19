@@ -1,17 +1,13 @@
 import argparse
 import os
-import sys
 from time import time
+from stochnet_v2.dynamic_classes.model import NASStochNet
+from stochnet_v2.dynamic_classes.trainer import Trainer
+from stochnet_v2.utils.file_organisation import ProjectFileExplorer
+from stochnet_v2.utils.util import str_to_bool
 
 
 def main():
-    path = os.path.dirname(__file__)
-    sys.path.append(os.path.join(path, '../..'))
-    from stochnet_v2.dynamic_classes.model import NASStochNet
-    from stochnet_v2.dynamic_classes.trainer import Trainer
-    from stochnet_v2.utils.file_organisation import ProjectFileExplorer
-    from stochnet_v2.utils.util import str_to_bool
-
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
     parser = argparse.ArgumentParser()
@@ -114,7 +110,7 @@ if __name__ == "__main__":
 
 
 """
-python stochnet_v2/train/train_search.py \
+python stochnet_v2/scripts/train_search.py \
     --project_folder='/home/dn/DATA/EGFR' \
     --timestep=0.2 \
     --dataset_id=1 \

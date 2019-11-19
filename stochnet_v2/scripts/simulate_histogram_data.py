@@ -2,9 +2,10 @@ import argparse
 import h5py
 import numpy as np
 import os
-import sys
-
 from time import time
+
+from stochnet_v2.utils.file_organisation import ProjectFileExplorer
+from stochnet_v2.dataset.simulation import build_simulation_dataset
 
 
 def get_histogram_settings(
@@ -38,11 +39,6 @@ def main():
     parser.add_argument('--model_name', type=str, required=True)
     parser.add_argument('--random_seed', type=int, default=23)
     args = parser.parse_args()
-
-    path = os.path.dirname(__file__)
-    sys.path.append(os.path.join(path, '../..'))
-    from stochnet_v2.utils.file_organisation import ProjectFileExplorer
-    from stochnet_v2.dataset.dataset_simulation import build_simulation_dataset
 
     project_folder = args.project_folder
     timestep = args.timestep
@@ -99,7 +95,7 @@ if __name__ == '__main__':
 
 
 """
-python stochnet_v2/dataset/histogram_dataset_simulation.py \
+python stochnet_v2/scripts/simulate_histogram_data.py \
        --project_folder='/home/dn/DATA/EGFR' \
        --timestep=0.2 \
        --dataset_id=1 \

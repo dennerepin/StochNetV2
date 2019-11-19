@@ -5,12 +5,14 @@ import logging
 import tensorflow as tf
 from functools import partial
 
+import stochnet_v2.dynamic_classes.nn_body_search as nn_body_search
+import stochnet_v2.dynamic_classes.nn_body as nn_body
 from stochnet_v2.static_classes.model import StochNet
-from stochnet_v2.dynamic_classes import nn_body_search
-from stochnet_v2.dynamic_classes import nn_body
 from stochnet_v2.dynamic_classes.nn_body_search import get_genotypes
 from stochnet_v2.utils.registry import CONSTRAINTS_REGISTRY
 from stochnet_v2.utils.registry import REGULARIZERS_REGISTRY
+
+
 LOGGER = logging.getLogger('dynamic_classes.model')
 
 
