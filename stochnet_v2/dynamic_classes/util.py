@@ -128,7 +128,7 @@ def _simple_dense(
         activity_regularizer=None,
         **kwargs,
 ):
-    n_units = x.shape.as_list()[-1] * expansion_coeff
+    n_units = int(x.shape.as_list()[-1] * expansion_coeff)
 
     with tf.variable_scope("Dense"):
         x = preprocess(x)
@@ -162,7 +162,7 @@ def _activated_dense(
         activity_regularizer=None,
         **kwargs,
 ):
-    n_units = x.shape.as_list()[-1] * expansion_coeff
+    n_units = int(x.shape.as_list()[-1] * expansion_coeff)
 
     with tf.variable_scope("ActivatedDense"):
         x = preprocess(x)
@@ -197,7 +197,7 @@ def _gated_linear_unit(
         activity_regularizer=None,
         **kwargs,
 ):
-    n_units = x.shape.as_list()[-1] * expansion_coeff
+    n_units = int(x.shape.as_list()[-1] * expansion_coeff)
 
     with tf.variable_scope("GatedLinearUnit"):
         if expansion_coeff > 1:
