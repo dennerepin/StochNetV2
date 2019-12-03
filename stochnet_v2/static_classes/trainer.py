@@ -152,7 +152,7 @@ class Trainer:
         with trainable_graph.as_default():
 
             regularization_loss = tf.losses.get_regularization_loss()
-            print(f"REGULARIZATION_LOSSES:{regularization_loss}")
+            LOGGER.debug(f"REGULARIZATION_LOSSES:{regularization_loss}")
 
             loss = model_loss + regularization_loss
 
@@ -422,7 +422,7 @@ class Trainer:
                         lr * learning_strategy.lr_decay
                     )
                     tol_step = 0
-                    print(f"drop lr: {lr}")
+                    LOGGER.debug(f"drop lr: {lr}")
             return lr, tol_step, tol_best_loss
 
         def _maybe_drop_lr_decay(lr):

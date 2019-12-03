@@ -1,3 +1,4 @@
+import logging
 import numpy as np
 import tensorflow as tf
 import tensorflow_probability as tfp
@@ -13,6 +14,9 @@ from stochnet_v2.dynamic_classes.util import l2_regularizer
 
 
 tfd = tfp.distributions
+
+
+LOGGER = logging.getLogger('dynamic_classes.nn_body_search')
 
 
 def mixed_op(x, expansion_coeff, **kwargs):
@@ -192,7 +196,7 @@ def get_genotypes(
             edges = []
             edges_scores = []
             output_state_idx = i + 2
-            print(f"STATE {output_state_idx}:")
+            LOGGER.debug(f"STATE {output_state_idx}:")
 
             for j in range(output_state_idx):
 
@@ -207,7 +211,7 @@ def get_genotypes(
                 alpha = alpha[0]
 
                 alpha_value = session.run(alpha)
-                print(f"\t{alpha_name}: {alpha_value}")
+                LOGGER.debug(f"\t{alpha_name}: {alpha_value}")
 
                 alpha_value_argsort = alpha_value.argsort()
 
@@ -224,19 +228,19 @@ def get_genotypes(
 
                 edge_candidate = PRIMITIVES[max_index]
                 edge_score = alpha_value[max_index]
-                print(f"\t{j}-th state via {edge_candidate.upper()}"
+                LOGGER.debug(f"\t{j}-th state via {edge_candidate.upper()}"
                       f" (max_index={max_index}, score={edge_score:.2f})")
                 edges.append((edge_candidate, j))
                 edges_scores.append(edge_score)
 
             edges_scores = np.array(edges_scores)
-            print(f"edges_scores = {edges_scores}")
+            LOGGER.debug(f"edges_scores = {edges_scores}")
 
             edges_scores_argsort = np.argsort(edges_scores)[::-1]  # decreasing order
             edges_sorted = [edges[i] for i in edges_scores_argsort]
             max_edges = edges_sorted[:2]
 
-            print(f"max_edges = {max_edges}\n")
+            LOGGER.debug(f"max_edges = {max_edges}\n")
             result.extend(max_edges)
 
         return result

@@ -1,3 +1,4 @@
+import logging
 import multiprocessing
 import numpy as np
 import os
@@ -6,6 +7,8 @@ from functools import partial
 from gillespy import StochKitSolver
 from importlib import import_module
 from tqdm import tqdm
+
+LOGGER = logging.getLogger('dataset.simulation')
 
 
 def build_simulation_dataset(
@@ -30,13 +33,13 @@ def build_simulation_dataset(
         **kwargs,
     )
     if how == 'concat':
-        print(">>>> starting concatenate_simulations...")
+        LOGGER.info(">>>> starting concatenate_simulations...")
         dataset = concatenate_simulations(nb_settings, dataset_folder, prefix=prefix)
-        print(">>>> done...")
+        LOGGER.info(">>>> done...")
     elif how == 'stack':
-        print(">>>> starting stack_simulations...")
+        LOGGER.info(">>>> starting stack_simulations...")
         dataset = stack_simulations(nb_settings, dataset_folder, prefix=prefix)
-        print(">>>> done...")
+        LOGGER.info(">>>> done...")
     else:
         raise ValueError("'how' accepts only two arguments: "
                          "'concat' and 'stack'.")
@@ -101,7 +104,7 @@ def perform_simulations(
     crn_instance = crn_class(endtime, timestep)
 
     count = (multiprocessing.cpu_count() // 3) * 2 + 1
-    print(" ===== CPU Cores used for simulations: %s =====" % count)
+    LOGGER.info(" ===== CPU Cores used for simulations: %s =====" % count)
     pool = multiprocessing.Pool(processes=count)
 
     kwargs = [(settings[n], n) for n in range(nb_settings)]
@@ -147,7 +150,7 @@ def save_simulation_data(
     partial_dataset_filename = str(prefix) + str(id_number) + '.npy'
     partial_dataset_filepath = os.path.join(dataset_folder,
                                             partial_dataset_filename)
-    print(f"Saving to partial_dataset_filepath: {partial_dataset_filepath}")
+    LOGGER.info(f"Saving to partial_dataset_filepath: {partial_dataset_filepath}")
     np.save(partial_dataset_filepath, data)
-    print("Saved.")
+    LOGGER.info("Saved.")
     return

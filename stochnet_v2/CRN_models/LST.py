@@ -6,9 +6,17 @@ from stochnet_v2.CRN_models.base import BaseCRNModel
 
 
 class LSTL(BaseCRNModel):
+    """Class for LST model."""
 
     def __init__(self, endtime, timestep):
+        """
+        Initialize the model.
 
+        Parameters
+        ----------
+        endtime : endtime of simulations
+        timestep : time-step of simulations
+        """
         super().__init__(
             endtime=endtime,
             timestep=timestep,
@@ -161,18 +169,48 @@ class LSTL(BaseCRNModel):
 
     @staticmethod
     def get_species_names():
+        """
+        Returns list of species names.
+
+        Returns
+        -------
+        list of all species names. The order of names should be coherent
+        with the list returned by get_initial_state method.
+
+        """
         return ['DFU', 'DFB', 'DFR', 'DAU', 'DAB', 'DAR', 'RNAP', 'P', 'A', 'R']
 
     @staticmethod
     def get_initial_state():
+        """
+        Returns default initial state.
+
+        Returns
+        -------
+        list of species initial values. The order of values should be coherent
+        with the list returned by get_species_names method.
+
+        """
         return [1, 0, 0, 0, 0, 0, 1500, 240, 275, 10]
 
     @classmethod
-    def get_n_species(cls):
-        return len(cls.get_species_names())
-
-    @classmethod
     def get_initial_settings(cls, n_settings, sigm=0.5):
+        """
+        Generate a set of random initial states.
+
+        Parameters
+        ----------
+        n_settings : number of initial states to generate
+        sigm : float parameter to set the upper bound for sampling species initial value:
+            - lower bound is set as `0.1 * val`,
+            - upper as `val + int(val * sigm)`,
+            where val is the species initial value returned by `get_initial_state` method.
+
+        Returns
+        -------
+        settings : array of initial settings (states) of size (n_settings, n_species)
+
+        """
         n_species = cls.get_n_species()
         initial_state = cls.get_initial_state()
         settings = np.zeros((n_settings, n_species))
@@ -193,19 +231,40 @@ class LSTL(BaseCRNModel):
 
     @classmethod
     def get_histogram_bounds(cls, species_names_list=None):
+        """
+        Returns bounds for species histograms.
+
+        Parameters
+        ----------
+        species_names_list: not used
+
+        Returns
+        -------
+        histogram_bounds: list of [min, max] values for species
+
+        """
         n_species_for_histogram = len(cls.get_species_for_histogram())
         histogram_bounds = [[0.5, 1800.5]] * n_species_for_histogram
         return histogram_bounds
 
     @staticmethod
     def get_species_for_histogram():
+        """Returns list of species to create histograms for evaluation"""
         return ['P']
 
 
 class LST(BaseCRNModel):
+    """Class for LST model."""
 
     def __init__(self, endtime, timestep):
+        """
+        Initialize the model.
 
+        Parameters
+        ----------
+        endtime : endtime of simulations
+        timestep : time-step of simulations
+        """
         super().__init__(
             endtime=endtime,
             timestep=timestep,
@@ -216,7 +275,7 @@ class LST(BaseCRNModel):
         on_rnap_rate = 10 ** 4 / self.N
 
         on_rnap = gillespy.Parameter(name='on_rnap', expression=on_rnap_rate)  # 10 ** 4 / self.N
-        off_rnap = gillespy.Parameter(name='off_rnap', expression=0.0002)  # 0.016
+        off_rnap = gillespy.Parameter(name='off_rnap', expression=0.0005)  # 0.016
         on_rnap_if_a = gillespy.Parameter(name='on_rnap_if_a', expression=49 * on_rnap_rate)
         on_r = gillespy.Parameter(name='on_r', expression=8.8 * 10 ** 7 / self.N)  # 8.8 * 10 ** 7 / self.N
         off_r = gillespy.Parameter(name='off_r', expression=0.001)  # 0.016
@@ -365,18 +424,47 @@ class LST(BaseCRNModel):
 
     @staticmethod
     def get_species_names():
+        """
+        Returns list of species names.
+
+        Returns
+        -------
+        list of all species names. The order of names should be coherent
+        with the list returned by get_initial_state method.
+
+        """
         return ['DFU', 'DFB', 'DFR', 'DAU', 'DAB', 'DAR', 'RNAP', 'P', 'A', 'R']
 
     @staticmethod
     def get_initial_state():
+        """
+        Returns default initial state.
+
+        Returns
+        -------
+        list of species initial values. The order of values should be coherent
+        with the list returned by get_species_names method.
+
+        """
         return [1, 0, 0, 0, 0, 0, 1500, 240, 275, 10]
 
     @classmethod
-    def get_n_species(cls):
-        return len(cls.get_species_names())
+    def get_initial_settings(cls, n_settings, sigm=1.0):
+        """
+        Generate a set of random initial states.
+        Parameters
+        ----------
+        n_settings : number of initial states to generate
+        sigm : float parameter to set the upper bound for sampling species initial value:
+            - lower bound is set as `0.1 * val`,
+            - upper as `val + int(val * sigm)`,
+            where val is the species initial value returned by `get_initial_state` method.
 
-    @classmethod
-    def get_initial_settings(cls, n_settings, sigm=0.5):
+        Returns
+        -------
+        settings : array of initial settings (states) of size (n_settings, n_species)
+
+        """
         n_species = cls.get_n_species()
         initial_state = cls.get_initial_state()
         settings = np.zeros((n_settings, n_species))
@@ -397,10 +485,23 @@ class LST(BaseCRNModel):
 
     @classmethod
     def get_histogram_bounds(cls, species_names_list=None):
+        """
+        Returns bounds for species histograms.
+
+        Parameters
+        ----------
+        species_names_list: not used
+
+        Returns
+        -------
+        histogram_bounds: list of [min, max] values for species
+
+        """
         n_species_for_histogram = len(cls.get_species_for_histogram())
         histogram_bounds = [[0.5, 1800.5]] * n_species_for_histogram
         return histogram_bounds
 
     @staticmethod
     def get_species_for_histogram():
+        """Returns list of species to create histograms for evaluation"""
         return ['P']

@@ -178,6 +178,7 @@ class TrainSearch(ExternalProgramTask):
     n_epochs_heat_up = luigi.IntParameter(default=20)
     n_epochs_arch = luigi.IntParameter(default=5)
     n_epochs_interval = luigi.IntParameter(default=5)
+    n_epochs_finetune = luigi.IntParameter(default=30)
     batch_size = luigi.IntParameter(default=256)
     add_noise = luigi.Parameter(default='false')
     stddev = luigi.FloatParameter(default=0.01)
@@ -200,6 +201,7 @@ class TrainSearch(ExternalProgramTask):
             f'--n_epochs_heat_up={self.n_epochs_heat_up}',
             f'--n_epochs_arch={self.n_epochs_arch}',
             f'--n_epochs_interval={self.n_epochs_interval}',
+            f'--n_epochs_finetune={self.n_epochs_finetune}',
             f'--batch_size={self.batch_size}',
             f'--add_noise={self.add_noise}',
             f'--stddev={self.stddev}',

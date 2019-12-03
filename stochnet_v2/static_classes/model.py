@@ -368,7 +368,6 @@ class StochNet:
         self._description_graphkeys = graphkeys
 
     def _copy_dataset_scaler(self):
-        print('Copying dataset scaler to model dir...')
         scaler_fp = os.path.join(self.model_explorer.model_folder, 'scaler.pickle')
         shutil.copy2(
             self.dataset_explorer.scaler_fp,

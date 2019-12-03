@@ -295,7 +295,7 @@ class Trainer:
                         for i, v in enumerate(variables):
                             v_softmax_name = v.name.replace('alphas:0', 'Softmax:0')
                             v_val, v_softmax_val = session.run([v, v_softmax_name])
-                            print(
+                            LOGGER.debug(
                                 f"{v.name} \n"
                                 f"\t{v_val},  min={np.min(v_val):.3f}, max={np.max(v_val):.3f} -> \n"
                                 f"\t{v_softmax_val}, min={np.min(v_softmax_val):.3f}, max={np.max(v_softmax_val):.3f}, "
@@ -601,7 +601,7 @@ class Trainer:
             trainable_vars = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES)
 
             regularization_loss = tf.losses.get_regularization_loss()
-            print(f"REGULARIZATION_LOSSES:{regularization_loss}")
+            LOGGER.debug(f"REGULARIZATION_LOSSES:{regularization_loss}")
 
             loss = model_loss + regularization_loss
 
@@ -719,8 +719,8 @@ class Trainer:
             save_checkpoints,
     ):
 
-        LOGGER.info(f'Total number of trainable vars {len(train_operations.train_variables)}')
-        LOGGER.info(f'Total number of main optimizer vars {len(train_operations.optimizer_variables)}')
+        LOGGER.debug(f'Total number of trainable vars {len(train_operations.train_variables)}')
+        LOGGER.debug(f'Total number of main optimizer vars {len(train_operations.optimizer_variables)}')
 
         initial_learning_rate = session.run(train_operations.learning_rate)
 
