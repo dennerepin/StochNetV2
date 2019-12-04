@@ -5,7 +5,7 @@ from importlib import import_module
 from time import time
 
 from stochnet_v2.utils.file_organisation import ProjectFileExplorer
-from stochnet_v2.dataset.simulation import build_simulation_dataset
+from stochnet_v2.dataset.simulation_gillespy import build_simulation_dataset
 
 LOGGER = logging.getLogger('scripts.simulate_data')
 
@@ -76,7 +76,7 @@ if __name__ == '__main__':
 
 
 """
-python stochnet_v2/scripts/simulate_data.py \
+python stochnet_v2/scripts/simulate_data_gillespy.py \
        --project_folder '/home/dn/DATA/EGFR' \
        --timestep 0.2 \
        --dataset_id 1 \

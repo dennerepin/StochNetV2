@@ -260,6 +260,12 @@ def evaluate(
     )
     end = time()
     LOGGER.info(f"Took {end - start:.1f} seconds")
+    with open(dataset_explorer.log_fp, 'a') as file:
+        file.write(
+            f"Simulating NN {n_traces} {model_name}, model_id={model_id} histogram trajectories "
+            f"for {n_settings} different settings until {int(timestep * n_steps)}({n_steps} steps) "
+            f"took {end - start:.1f} seconds.\n"
+        )
 
     count = (multiprocessing.cpu_count() // 4) * 3 + 1
     pool = multiprocessing.Pool(processes=count)

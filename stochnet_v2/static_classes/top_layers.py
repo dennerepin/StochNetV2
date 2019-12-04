@@ -374,7 +374,8 @@ class MultivariateNormalDiagOutputLayer(RandomVariableOutputLayer):
 
     def loss_function(self, y_true, y_pred):
         loss = - self.log_likelihood(y_true, y_pred)
-        loss = tf.math.reduce_mean(loss)
+        # loss = tf.math.reduce_mean(loss)
+        loss = tf.reshape(loss, [-1])
         return loss
 
     def log_likelihood(self, y_true, y_pred):
@@ -557,7 +558,8 @@ class MultivariateNormalTriLOutputLayer(RandomVariableOutputLayer):
 
     def loss_function(self, y_true, y_pred):
         loss = - self.log_likelihood(y_true, y_pred)
-        loss = tf.math.reduce_mean(loss)
+        # loss = tf.math.reduce_mean(loss)
+        loss = tf.reshape(loss, [-1])
         return loss
 
     def log_likelihood(self, y_true, y_pred):
@@ -738,7 +740,8 @@ class MixtureOutputLayer(RandomVariableOutputLayer):
 
     def loss_function(self, y_true, y_pred):
         loss = - self.log_likelihood(y_true, y_pred)
-        loss = tf.math.reduce_mean(loss)
+        # loss = tf.math.reduce_mean(loss)
+        loss = tf.reshape(loss, [-1])
         return loss
 
     def log_likelihood(self, y_true, y_pred):

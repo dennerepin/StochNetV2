@@ -31,7 +31,7 @@ class DataTransformer:
             Data in the file should be of shape [nb_traces, nb_steps, nb_features].
             If with_timestamps is True, the first feature is considered as time.
         with_timestamps : boolean, whether time is included in data (as the very first feature)
-            Data produced by scripts/simulate_data.py has time, therefore default values is True.
+            Data produced by scripts/simulate_data_gillespy.py has time, therefore default values is True.
         """
         self.nb_trajectories = None
         self.nb_timesteps = None

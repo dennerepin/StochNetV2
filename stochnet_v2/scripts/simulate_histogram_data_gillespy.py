@@ -5,7 +5,7 @@ import os
 from time import time
 from importlib import import_module
 from stochnet_v2.utils.file_organisation import ProjectFileExplorer
-from stochnet_v2.dataset.simulation import build_simulation_dataset
+from stochnet_v2.dataset.simulation_gillespy import build_simulation_dataset
 
 
 def get_histogram_settings(
@@ -100,7 +100,7 @@ if __name__ == '__main__':
 
 
 """
-python stochnet_v2/scripts/simulate_histogram_data.py \
+python stochnet_v2/scripts/simulate_histogram_data_gillespy.py \
        --project_folder='/home/dn/DATA/EGFR' \
        --timestep=0.2 \
        --dataset_id=1 \
