@@ -5,8 +5,6 @@ import numpy as np
 tfd = tfp.distributions
 bijectors = tfp.bijectors
 
-np.set_printoptions(suppress=True, precision=3)
-
 
 class Categorical:
 

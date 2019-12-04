@@ -3,9 +3,9 @@ import h5py
 import numpy as np
 import os
 from time import time
-
+from importlib import import_module
 from stochnet_v2.utils.file_organisation import ProjectFileExplorer
-from stochnet_v2.dataset.simulation import build_simulation_dataset
+from stochnet_v2.dataset.simulation_gillespy import build_simulation_dataset
 
 
 def get_histogram_settings(
@@ -59,11 +59,16 @@ def main():
         dataset_id
     )
 
-    settings = get_histogram_settings(
-        nb_settings,
-        # dataset_explorer.train_fp,
-        dataset_explorer.test_fp,
-    )
+    # settings = get_histogram_settings(
+    #     nb_settings,
+    #     # dataset_explorer.train_fp,
+    #     dataset_explorer.test_fp,
+    # )
+
+    crn_module = import_module("stochnet_v2.CRN_models." + model_name)
+    crn_class = getattr(crn_module, model_name)
+    settings = crn_class.get_initial_settings(nb_settings)
+
     np.save(dataset_explorer.histogram_settings_fp, settings)
 
     histogram_dataset = build_simulation_dataset(
@@ -95,7 +100,7 @@ if __name__ == '__main__':
 
 
 """
-python stochnet_v2/scripts/simulate_histogram_data.py \
+python stochnet_v2/scripts/simulate_histogram_data_gillespy.py \
        --project_folder='/home/dn/DATA/EGFR' \
        --timestep=0.2 \
        --dataset_id=1 \

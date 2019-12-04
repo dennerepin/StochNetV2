@@ -1,10 +1,13 @@
 import argparse
+import logging
 import numpy as np
 from importlib import import_module
 from time import time
 
 from stochnet_v2.utils.file_organisation import ProjectFileExplorer
-from stochnet_v2.dataset.simulation import build_simulation_dataset
+from stochnet_v2.dataset.simulation_gillespy import build_simulation_dataset
+
+LOGGER = logging.getLogger('scripts.simulate_data')
 
 
 def main():
@@ -28,7 +31,7 @@ def main():
     model_name = args.model_name
     random_seed = args.random_seed
 
-    print(">>> START")
+    LOGGER.info(">>> START")
     start = time()
 
     np.random.seed(random_seed)
@@ -41,7 +44,7 @@ def main():
     settings = crn_class.get_initial_settings(nb_settings)
     np.save(dataset_explorer.settings_fp, settings)
 
-    print(f"Dataset folder: {dataset_explorer.dataset_folder}")
+    LOGGER.info(f"Dataset folder: {dataset_explorer.dataset_folder}")
 
     dataset = build_simulation_dataset(
         model_name,
@@ -54,7 +57,7 @@ def main():
     )
     np.save(dataset_explorer.dataset_fp, dataset)
 
-    print(">>> DONE.")
+    LOGGER.info(">>> DONE.")
 
     end = time()
     execution_time = end - start
@@ -65,7 +68,7 @@ def main():
     with open(dataset_explorer.log_fp, 'a') as f:
         f.write(msg)
 
-    print(msg)
+    LOGGER.info(msg)
 
 
 if __name__ == '__main__':
@@ -73,7 +76,7 @@ if __name__ == '__main__':
 
 
 """
-python stochnet_v2/scripts/simulate_data.py \
+python stochnet_v2/scripts/simulate_data_gillespy.py \
        --project_folder '/home/dn/DATA/EGFR' \
        --timestep 0.2 \
        --dataset_id 1 \

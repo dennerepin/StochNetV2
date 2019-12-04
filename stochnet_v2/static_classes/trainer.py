@@ -152,7 +152,7 @@ class Trainer:
         with trainable_graph.as_default():
 
             regularization_loss = tf.losses.get_regularization_loss()
-            print(f"REGULARIZATION_LOSSES:{regularization_loss}")
+            LOGGER.debug(f"REGULARIZATION_LOSSES:{regularization_loss}")
 
             loss = model_loss + regularization_loss
 
@@ -293,9 +293,11 @@ class Trainer:
         # general summaries:
         summary_writer = tf.compat.v1.summary.FileWriter(tensorboard_log_dir, session.graph)
         learning_rate_summary = tf.compat.v1.summary.scalar('train_learning_rate', train_operations.learning_rate)
-        train_loss_summary = tf.compat.v1.summary.scalar('train_loss', train_operations.loss)
-        # TODO: FOR VECTOR LOSS
-        # train_loss_summary = tf.compat.v1.summary.scalar('train_loss', tf.reduce_mean(train_operations.loss))
+
+        # train_loss_summary = tf.compat.v1.summary.scalar('train_loss', train_operations.loss)
+        train_loss_summary = tf.compat.v1.summary.scalar(
+            'train_loss', tf.reduce_mean(train_operations.loss))  # TODO: FOR VECTOR LOSS:
+
         test_mean_loss_ph = tf.compat.v1.placeholder(tf.float32, ())
         test_loss_summary = tf.compat.v1.summary.scalar('test_mean_loss', test_mean_loss_ph)
 
@@ -368,7 +370,7 @@ class Trainer:
             }
 
             res = session.run(fetches=fetches, feed_dict=feed_dict)
-            # res['loss'] = np.mean(res['loss'])  # TODO: FOR VECTOR LOSS
+            res['loss'] = np.mean(res['loss'])  # TODO: FOR VECTOR LOSS
             return res
 
         def _run_test():
@@ -384,7 +386,7 @@ class Trainer:
                 }
 
                 res = session.run(fetches=fetches, feed_dict=feed_dict)
-                # res['loss'] = np.mean(res['loss'])  # TODO: FOR VECTOR LOSS
+                res['loss'] = np.mean(res['loss'])  # TODO: FOR VECTOR LOSS
                 test_losses.append(res['loss'])
 
             test_mean_loss = np.mean(test_losses)
@@ -422,7 +424,7 @@ class Trainer:
                         lr * learning_strategy.lr_decay
                     )
                     tol_step = 0
-                    print(f"drop lr: {lr}")
+                    LOGGER.debug(f"drop lr: {lr}")
             return lr, tol_step, tol_best_loss
 
         def _maybe_drop_lr_decay(lr):

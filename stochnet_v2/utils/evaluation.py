@@ -1,3 +1,4 @@
+import logging
 import matplotlib.pyplot as plt
 import numpy as np
 import multiprocessing
@@ -10,6 +11,9 @@ from tqdm import tqdm
 from stochnet_v2.static_classes.model import StochNet
 from stochnet_v2.utils.file_organisation import ProjectFileExplorer
 from stochnet_v2.utils.util import maybe_create_dir
+
+
+LOGGER = logging.getLogger('utils.evaluation')
 
 
 def get_gillespy_histogram_data(
@@ -50,11 +54,11 @@ def get_nn_histogram_data(
     histogram_data = np.load(dataset_explorer.histogram_dataset_fp)
     initial_settings = histogram_data[:, 0, 0:nb_past_timesteps, -nb_features:]
 
-    print("Start generating NN traces")
+    LOGGER.info("Start generating NN traces")
     cnt = 0
     while True:
         if cnt > 10:
-            print(f"Failed to generate NN traces after {cnt} attempts...")
+            LOGGER.error(f"Failed to generate NN traces after {cnt} attempts...")
             break
         try:
             traces = nn.generate_traces(
@@ -65,12 +69,12 @@ def get_nn_histogram_data(
                 round_result=True,
                 add_timestamps=add_timestamps,
             )
-            print(f"Done. generated data shape: {traces.shape}")
+            LOGGER.info(f"Done. generated data shape: {traces.shape}")
             if path_to_save_generated_data:
                 np.save(path_to_save_generated_data, traces)
             return traces
         except:
-            print("Oops... trying again")
+            LOGGER.warning("Oops... trying again")
             cnt += 1
 
 
@@ -255,7 +259,13 @@ def evaluate(
         add_timestamps=with_timestamps,
     )
     end = time()
-    print(f"Took {end - start:.1f} seconds")
+    LOGGER.info(f"Took {end - start:.1f} seconds")
+    with open(dataset_explorer.log_fp, 'a') as file:
+        file.write(
+            f"Simulating NN {n_traces} {model_name}, model_id={model_id} histogram trajectories "
+            f"for {n_settings} different settings until {int(timestep * n_steps)}({n_steps} steps) "
+            f"took {end - start:.1f} seconds.\n"
+        )
 
     count = (multiprocessing.cpu_count() // 4) * 3 + 1
     pool = multiprocessing.Pool(processes=count)
@@ -272,13 +282,13 @@ def evaluate(
         return_histograms=False,
     )
 
-    print(f"Start calculating distances for different time-lags, using {count} CPU cores for multiprocessing")
+    LOGGER.info(f"Start calculating distances for different time-lags, using {count} CPU cores for multiprocessing")
     start = time()
     time_lags = list(range(n_steps - 1))
 
     species_distances = pool.map(task, time_lags)
     end = time()
-    print(f"Took {end - start:.1f} seconds")
+    LOGGER.info(f"Took {end - start:.1f} seconds")
 
     mean_distances = [np.mean(dist_i) for dist_i in species_distances]
     species_distances = np.array(species_distances)
@@ -313,7 +323,7 @@ def evaluate(
         distance_fn = _histogram_distance if distance_kind == 'l1' else _iou_distance
         time_lag_range = time_lag_range or list(range(5, n_steps - 1, 10))
 
-        print(
+        LOGGER.info(
             f"Start building histograms for different settings: {settings_idxs_to_save_histograms}\n"
             f"and time-lags: {time_lag_range}"
         )
@@ -407,6 +417,6 @@ def evaluate(
                     plt.close(fig)
 
         end = time()
-        print(f"Took {end - start:.1f} seconds")
+        LOGGER.info(f"Took {end - start:.1f} seconds")
 
-    print("All done.")
+    LOGGER.info("All done.")

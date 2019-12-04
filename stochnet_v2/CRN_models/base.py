@@ -70,6 +70,7 @@ class BaseCRNModel(gillespy.Model):
         pass
 
     @staticmethod
+    @abstractmethod
     def get_initial_state():
         """
         Returns default initial state.

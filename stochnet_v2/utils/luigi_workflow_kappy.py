@@ -25,11 +25,12 @@ class GlobalParams(luigi.Config):
 class GenerateDataset(ExternalProgramTask):
 
     dataset_id = luigi.IntParameter()
+    var_list = luigi.Parameter()  # list of variables to randomize
     nb_settings = luigi.IntParameter()
     nb_trajectories = luigi.IntParameter()
 
     def program_args(self):
-        program_module = import_module("stochnet_v2.scripts.simulate_data_gillespy")
+        program_module = import_module("stochnet_v2.scripts.simulate_data_kappy")
         program_address = program_module.__file__
         return [
             'python',
@@ -37,6 +38,7 @@ class GenerateDataset(ExternalProgramTask):
             f'--project_folder={self.project_folder}',
             f'--timestep={self.timestep}',
             f'--dataset_id={self.dataset_id}',
+            f'--var_list={self.var_list}',
             f'--nb_settings={self.nb_settings}',
             f'--nb_trajectories={self.nb_trajectories}',
             f'--endtime={self.endtime}',
@@ -93,12 +95,13 @@ class FormatDataset(ExternalProgramTask):
 @requires(FormatDataset)
 class GenerateHistogramData(ExternalProgramTask):
 
+    var_list = luigi.Parameter()  # list of variables to randomize
     nb_histogram_settings = luigi.IntParameter()
     nb_histogram_trajectories = luigi.IntParameter()
     histogram_endtime = luigi.FloatParameter()
 
     def program_args(self):
-        program_module = import_module("stochnet_v2.scripts.simulate_histogram_data_gillespy")
+        program_module = import_module("stochnet_v2.scripts.simulate_histogram_data_kappy")
         program_address = program_module.__file__
         return [
             'python',
@@ -106,6 +109,7 @@ class GenerateHistogramData(ExternalProgramTask):
             f'--project_folder={self.project_folder}',
             f'--timestep={self.timestep}',
             f'--dataset_id={self.dataset_id}',
+            f'--var_list={self.var_list}',
             f'--nb_settings={self.nb_histogram_settings}',
             f'--nb_trajectories={self.nb_histogram_trajectories}',
             f'--endtime={self.histogram_endtime}',

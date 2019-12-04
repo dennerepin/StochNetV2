@@ -98,9 +98,9 @@ class NASStochNet(StochNet):
     def custom_restore_from_checkpoint(self, ckpt_path):
         reader = tf.compat.v1.train.NewCheckpointReader(ckpt_path)
         model_variables = self.graph.get_collection('variables')
-        print("Custom restore")
+        # print("Custom restore")
         for v in model_variables:
             name = v.name.replace(':0', '')
-            print(name, v.shape, reader.get_tensor(name).shape)
+            # print(name, v.shape, reader.get_tensor(name).shape)
             self.session.run(v.assign(reader.get_tensor(name)))
         self.restored = True

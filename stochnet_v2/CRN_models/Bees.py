@@ -5,7 +5,11 @@ from stochnet_v2.CRN_models.base import BaseCRNModel
 
 
 class Bees(BaseCRNModel):
-
+    """
+    Class for bees stinging model. All reaction rates are mass-action,
+    except the rate for reaction `become_aggressive`: the impact of pheromone (P)
+    is expressed as sigmoid function with saturation level at L/2.
+    """
     def __init__(
             self,
             endtime,
@@ -13,7 +17,16 @@ class Bees(BaseCRNModel):
             n_bees=10,
             non_aggressive_frac=0.3,
     ):
+        """
+        Initialize model.
 
+        Parameters
+        ----------
+        endtime : simulation endtime
+        timestep : simulation time-step
+        n_bees : number of bees in population
+        non_aggressive_frac : float, fraction of non-aggressive bees
+        """
         super().__init__(
             endtime=endtime,
             timestep=timestep,
@@ -92,6 +105,7 @@ class Bees(BaseCRNModel):
 
     @staticmethod
     def get_species_names():
+        """Returns list of all species names."""
         return [
             'Bee',
             'BeeA',
@@ -101,14 +115,26 @@ class Bees(BaseCRNModel):
 
     @staticmethod
     def get_initial_state():
+        """Returns list of species initial values."""
         return [80, 20, 0, 10]
 
     @classmethod
-    def get_n_species(cls):
-        return len(cls.get_species_names())
-
-    @classmethod
     def get_initial_settings(cls, n_settings, sigm=0.5):
+        """
+        Generate a set of random initial states.
+        Parameters
+        ----------
+        n_settings : number of initial states to generate
+        sigm : float parameter to set the upper bound for sampling species initial value:
+            - lower bound is set as `0.1 * val`,
+            - upper as `val + int(val * sigm)`,
+            where val is the species initial value returned by `get_initial_state` method.
+
+        Returns
+        -------
+        settings : array of initial settings (states) of size (n_settings, n_species)
+
+        """
         n_species = cls.get_n_species()
         initial_state = cls.get_initial_state()
         settings = np.zeros((n_settings, n_species))
@@ -129,16 +155,31 @@ class Bees(BaseCRNModel):
 
     @classmethod
     def get_histogram_bounds(cls, species_names_list=None):
+        """
+        Returns bounds for species histograms.
+
+        Parameters
+        ----------
+        species_names_list: list of species to produce bounds (optional)
+
+        Returns
+        -------
+        histogram_bounds: list of [min, max] values for species selected either by
+            species_names_list or get_species_for_histogram method
+
+        """
         n_species_for_histogram = len(cls.get_species_for_histogram())
         histogram_bounds = [[0.5, 18.5]] * n_species_for_histogram
         return histogram_bounds
 
     @staticmethod
     def get_species_for_histogram():
+        """Returns list of species to create histograms for evaluation"""
         return ['Bee', 'BeeA', 'BeeNA', 'BeeD']
 
 
 class BeesMA(BaseCRNModel):
+    """Class for bees stinging model, all reactions are mass-action."""
 
     def __init__(
             self,
@@ -147,7 +188,16 @@ class BeesMA(BaseCRNModel):
             n_bees=100,
             non_aggressive_frac=0.2,
     ):
+        """
+        Initialize model.
 
+        Parameters
+        ----------
+        endtime : simulation endtime
+        timestep : simulation time-step
+        n_bees : number of bees in population
+        non_aggressive_frac : float, fraction of non-aggressive bees
+        """
         super().__init__(
             endtime=endtime,
             timestep=timestep,
@@ -219,6 +269,7 @@ class BeesMA(BaseCRNModel):
 
     @staticmethod
     def get_species_names():
+        """Returns list of all species names."""
         return [
             'Bee',
             'BeeA',
@@ -228,14 +279,26 @@ class BeesMA(BaseCRNModel):
 
     @staticmethod
     def get_initial_state():
+        """Returns list of species initial values."""
         return [80, 20, 0, 10]
 
     @classmethod
-    def get_n_species(cls):
-        return len(cls.get_species_names())
-
-    @classmethod
     def get_initial_settings(cls, n_settings, sigm=0.5):
+        """
+        Generate a set of random initial states.
+        Parameters
+        ----------
+        n_settings : number of initial states to generate
+        sigm : float parameter to set the upper bound for sampling species initial value:
+            - lower bound is set as `0.1 * val`,
+            - upper as `val + int(val * sigm)`,
+            where val is the species initial value returned by `get_initial_state` method.
+
+        Returns
+        -------
+        settings : array of initial settings (states) of size (n_settings, n_species)
+
+        """
         n_species = cls.get_n_species()
         initial_state = cls.get_initial_state()
         settings = np.zeros((n_settings, n_species))
@@ -256,10 +319,24 @@ class BeesMA(BaseCRNModel):
 
     @classmethod
     def get_histogram_bounds(cls, species_names_list=None):
+        """
+        Returns bounds for species histograms.
+
+        Parameters
+        ----------
+        species_names_list: list of species to produce bounds (optional)
+
+        Returns
+        -------
+        histogram_bounds: list of [min, max] values for species selected either by
+            species_names_list or get_species_for_histogram method
+
+        """
         n_species_for_histogram = len(cls.get_species_for_histogram())
         histogram_bounds = [[0.5, 18.5]] * n_species_for_histogram
         return histogram_bounds
 
     @staticmethod
     def get_species_for_histogram():
+        """Returns list of species to create histograms for evaluation"""
         return ['Bee', 'BeeA', 'BeeNA', 'BeeD']

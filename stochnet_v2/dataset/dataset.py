@@ -1,5 +1,6 @@
 import abc
 import h5py
+import logging
 import numpy as np
 import os
 import pickle
@@ -10,15 +11,28 @@ from sklearn.preprocessing.data import StandardScaler, MinMaxScaler
 from tqdm import tqdm
 from stochnet_v2.utils.errors import ShapeError
 
+LOGGER = logging.getLogger('dataset.dataset')
+
 
 class DataTransformer:
+    """DataTransformer transforms CRN traces into training examples with optional scaling."""
 
     def __init__(
             self,
             dataset_address,
             with_timestamps=True,
-            dtype=np.float32,
     ):
+        """
+        Initialize transformer.
+
+        Parameters
+        ----------
+        dataset_address : filepath to the dataset containing CRN traces.
+            Data in the file should be of shape [nb_traces, nb_steps, nb_features].
+            If with_timestamps is True, the first feature is considered as time.
+        with_timestamps : boolean, whether time is included in data (as the very first feature)
+            Data produced by scripts/simulate_data_gillespy.py has time, therefore default values is True.
+        """
         self.nb_trajectories = None
         self.nb_timesteps = None
         self.nb_features = None
@@ -29,7 +43,7 @@ class DataTransformer:
         self._scaler = None
         self.scaler_is_fitted = False
         self.scaler_positivity = None
-        self.dtype = dtype
+        self.dtype = np.float32
 
         self.read_data(dataset_address)
 
@@ -38,11 +52,13 @@ class DataTransformer:
         return self._scaler
 
     def read_data(self, dataset_address):
+        """Read data and memorize shape."""
         with open(dataset_address, 'rb') as data_file:
             self.data = np.asarray(np.load(data_file), dtype=self.dtype)
             self._memorize_dataset_shape()
 
     def _memorize_dataset_shape(self):
+        """Memorize data shape."""
         if self.data.ndim != 3:
             raise ShapeError(
                 f"The dataset is not properly formatted.\n"
@@ -53,6 +69,15 @@ class DataTransformer:
         self.nb_trajectories, self.nb_timesteps, self.nb_features = self.data.shape
 
     def set_labels(self, labels):
+        """
+        Set labels for species.
+
+        Parameters
+        ----------
+        labels : list of species names. Length of the list and the order of names
+            should coincide with the species presented in data (excluding `time`).
+
+        """
         if labels is None:
             self.labels = None
             self.with_labels = False
@@ -69,6 +94,7 @@ class DataTransformer:
             self.with_labels = True
 
     def drop_timestamps(self):
+        """Drop time from data."""
         if self.with_timestamps is True:
 
             self.data = self.data[..., 1:]
@@ -93,13 +119,12 @@ class DataTransformer:
         self.scaler_is_fitted = False
 
     def _fit_scaler(self, positivity=False, slice_size=None):
-
         if (self._scaler is None) or (self.scaler_positivity != positivity):
             self._create_scaler(positivity)
 
         if not self.scaler_is_fitted:
 
-            print(f"Fitting scaler, positivity={positivity}")
+            LOGGER.info(f"Fitting scaler, positivity={positivity}")
 
             if slice_size is None:
                 self._scaler.fit(self.data.reshape(-1, self.nb_features))
@@ -119,6 +144,18 @@ class DataTransformer:
             self.scaler_is_fitted = True
 
     def rescale(self, data):
+        """
+        Apply scaler to data.
+
+        Parameters
+        ----------
+        data : data to rescale.
+
+        Returns
+        -------
+        data : rescaled data.
+
+        """
         # return self.scaler.transform(data)
         if isinstance(self.scaler, StandardScaler):
             data = (data - self.scaler.mean_) / self.scaler.scale_
@@ -127,6 +164,17 @@ class DataTransformer:
         return data
 
     def scale_back(self, data):
+        """
+        Apply scaler inverse transform, returning data to the original scale.
+        Parameters
+        ----------
+        data : data (rescaled).
+
+        Returns
+        -------
+        data : data scaled back.
+
+        """
         # return self.scaler.inverse_transform(data)
         if isinstance(self.scaler, StandardScaler):
             data = data * self.scaler.scale_ + self.scaler.mean_
@@ -214,7 +262,7 @@ class DataTransformer:
 
     def get_train_test_data_generators(
             self,
-            nb_past_timesteps,
+            nb_past_timesteps=1,
             test_fraction=0.2,
             keep_timestamps=False,
             rescale=True,
@@ -223,6 +271,29 @@ class DataTransformer:
             slice_size=None,
 
     ):
+        """
+        Produce data generators, yielding chunks of transformed data,
+        containing (optionally) rescaled training examples.
+        Each training example is a single transition between states of the system:
+            (x, y) = (trajectory[i:i+nb_past_timesteps], trajectory[i+nb_past_timesteps])
+
+        Parameters
+        ----------
+        nb_past_timesteps : number of steps observed before each transition.
+        test_fraction : float, fraction of data that will be used for test.
+        keep_timestamps : boolean, whether to keep timestamps in data, default is False.
+        rescale : boolean, whether data should be rescaled.
+        positivity : boolean, if True, data will be rescaled between 0 and 1, otherwise standardized.
+        shuffle : boolean, if True trajectories will be shuffled before producing training examples.
+        slice_size : int, number of trajectories to process at once, optional. May be useful for
+            large datasets to reduce memory consumption. If None, all trajectories used.
+
+        Returns
+        -------
+        (train_generator, test_generator) : iterable generators of training examples.
+            Every iteration of generator yields training examples produced from
+            `slice_size` number of trajectories.
+        """
         if keep_timestamps is False:
             self.drop_timestamps()
 
@@ -253,7 +324,7 @@ class DataTransformer:
     def save_data_for_ml_hdf5(
             self,
             dataset_folder,
-            nb_past_timesteps,
+            nb_past_timesteps=1,
             test_fraction=0.2,
             keep_timestamps=False,
             rescale=True,
@@ -262,6 +333,29 @@ class DataTransformer:
             slice_size=None,
             force_rewrite=False,
     ):
+        """
+        Write training and test datasets to hdf5 files.
+        Original trajectories are optionally scaled and split into training examples:
+            (x, y) = (trajectory[i:i+nb_past_timesteps], trajectory[i+nb_past_timesteps])
+
+        Parameters
+        ----------
+        dataset_folder : folder to save datasets
+        nb_past_timesteps : number of steps observed before each transition.
+        test_fraction : float, fraction of data that will be used for test.
+        keep_timestamps : boolean, whether to keep timestamps in data, default is False.
+        rescale : boolean, whether data should be rescaled.
+        positivity : boolean, if True, data will be rescaled between 0 and 1, otherwise standardized.
+        shuffle : boolean, if True trajectories will be shuffled before producing training examples.
+        slice_size : int, number of trajectories to process at once, optional. May be useful for
+            large datasets to reduce memory consumption. If None, all trajectories used.
+        force_rewrite : boolean, if True, existing files will be rewritten.
+
+        Returns
+        -------
+        None
+
+        """
         train_gen, test_gen = self.get_train_test_data_generators(
             nb_past_timesteps=nb_past_timesteps,
             test_fraction=test_fraction,
@@ -307,7 +401,7 @@ class DataTransformer:
                 df['y'].resize(df['y'].shape[0] + n_new_items, axis=0)
                 df['y'][-n_new_items:] = y
 
-            print(f"Train data saved to {train_fp}, \n"
+            LOGGER.info(f"Train data saved to {train_fp}, \n"
                   f"Shapes: x: {df['x'].shape}, y: {df['y'].shape}")
 
         with h5py.File(test_fp, 'a', libver='latest') as df:
@@ -331,7 +425,7 @@ class DataTransformer:
                 df['y'].resize(df['y'].shape[0] + n_new_items, axis=0)
                 df['y'][-n_new_items:] = y
 
-            print(f"Test data saved to {test_fp}, \n"
+            LOGGER.info(f"Test data saved to {test_fp}, \n"
                   f"Shapes: x: {df['x'].shape}, y: {df['y'].shape}")
 
     def save_data_for_ml_tfrecord(
@@ -346,6 +440,29 @@ class DataTransformer:
             slice_size=None,
             force_rewrite=False,
     ):
+        """
+        Write training and test datasets to TFRecord files.
+        Original trajectories are optionally scaled and split into training examples:
+            (x, y) = (trajectory[i:i+nb_past_timesteps], trajectory[i+nb_past_timesteps])
+
+        Parameters
+        ----------
+        dataset_folder : folder to save datasets
+        nb_past_timesteps : number of steps observed before each transition.
+        test_fraction : float, fraction of data that will be used for test.
+        keep_timestamps : boolean, whether to keep timestamps in data, default is False.
+        rescale : boolean, whether data should be rescaled.
+        positivity : boolean, if True, data will be rescaled between 0 and 1, otherwise standardized.
+        shuffle : boolean, if True trajectories will be shuffled before producing training examples.
+        slice_size : int, number of trajectories to process at once, optional. May be useful for
+            large datasets to reduce memory consumption. If None, all trajectories used.
+        force_rewrite : boolean, if True, existing files will be rewritten.
+
+        Returns
+        -------
+        None
+
+        """
         train_gen, test_gen = self.get_train_test_data_generators(
             nb_past_timesteps=nb_past_timesteps,
             test_fraction=test_fraction,
@@ -405,6 +522,7 @@ class DataTransformer:
 
 
 class BaseDataset(metaclass=abc.ABCMeta):
+    """Base class for iterable dataset providing batches of training examples."""
 
     def __init__(
             self,
@@ -412,6 +530,16 @@ class BaseDataset(metaclass=abc.ABCMeta):
             shuffle=True,
             drop_remainder=True,
     ):
+        """
+        Initialize Dataset.
+
+        Parameters
+        ----------
+        batch_size : number of examples in single batch.
+        shuffle : boolean, if True, batches will reshuffled each time.
+        drop_remainder : boolean, whether to drop the last batch of remaining examples.
+            If False, a smaller batch will be yielded at the end.
+        """
         self._batch_size = batch_size
         self._shuffle = shuffle
         self._drop_remainder = drop_remainder
@@ -426,6 +554,7 @@ class BaseDataset(metaclass=abc.ABCMeta):
 
 
 class HDF5Dataset(BaseDataset):
+    """Dataset iterating through hdf5 files written by DataTransformer."""
 
     def __init__(
             self,
@@ -434,6 +563,16 @@ class HDF5Dataset(BaseDataset):
             shuffle=True,
             preprocess_fn=None,
     ):
+        """
+        Initialize Dataset.
+
+        Parameters
+        ----------
+        data_file_path : path of hdf5 file.
+        batch_size : number of examples in single batch.
+        shuffle : boolean, if True, batches will reshuffled each time.
+        preprocess_fn : callable, function to apply to every data batch before yielding.
+        """
         self._data_file_path = data_file_path
         self._preprocess_fn = preprocess_fn
 
@@ -472,7 +611,7 @@ class HDF5Dataset(BaseDataset):
 
 
 class TFRecordsDataset(BaseDataset):
-
+    """Dataset iterating through TFRecord files written by DataTransformer."""
     def __init__(
             self,
             records_paths,
@@ -484,6 +623,16 @@ class TFRecordsDataset(BaseDataset):
             nb_features=None,
             preprocess_fn=None,
     ):
+        """
+        Initialize Dataset.
+
+        Parameters
+        ----------
+        records_paths : path to the TFRecord file.
+        batch_size : number of examples in single batch.
+        shuffle : boolean, if True, batches will reshuffled each time.
+        preprocess_fn : callable, function to apply to every data batch before yielding.
+        """
         self._records_paths = records_paths
         self._nb_past_timesteps = nb_past_timesteps
         self._nb_features = nb_features

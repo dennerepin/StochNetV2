@@ -1,3 +1,4 @@
+import logging
 import numpy as np
 import tensorflow as tf
 
@@ -15,6 +16,8 @@ initializer = tf.compat.v1.initializers.variance_scaling(mode='fan_out', distrib
 
 BODY_FN_REGISTRY = Registry(name="BodyFunctionsRegistry")
 BLOCKS_REGISTRY = Registry(name="ResidualBlocksRegistry")
+
+LOGGER = logging.getLogger('static_classes.nn_bodies')
 
 
 @BLOCKS_REGISTRY.register("a")
@@ -178,7 +181,7 @@ def body_main(
         bias_constraint="none",
         bias_regularizer="none",
 ):
-    print(
+    LOGGER.info(
         f"\n"
         f" ** Building '{body_fn_name}' body, hidden size: {hidden_size} \n"
         f"    with {n_blocks} of '{block_name}' block \n"

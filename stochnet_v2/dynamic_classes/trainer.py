@@ -180,16 +180,20 @@ class Trainer:
                 learning_rate_summary_main = tf.compat.v1.summary.scalar(
                     'train_learning_rate_main', train_operations_main.learning_rate)
                 loss_summary_main = tf.compat.v1.summary.scalar(
-                    'train_loss_main', train_operations_main.loss)
+                    # 'train_loss_main', train_operations_main.loss)
+                    'train_loss_main', tf.reduce_mean(train_operations_main.loss))  # TODO: for vector loss
 
                 learning_rate_summary_arch = tf.compat.v1.summary.scalar(
                     'train_learning_rate_arch', train_operations_arch.learning_rate)
                 loss_summary_arch = tf.compat.v1.summary.scalar(
-                    'train_loss_arch', train_operations_arch.loss)
+                    # 'train_loss_arch', train_operations_arch.loss)
+                    'train_loss_arch', tf.reduce_mean(train_operations_arch.loss))  # TODO: for vector loss
 
                 test_mean_loss_ph = tf.compat.v1.placeholder(tf.float32, ())
-                test_loss_summary_main = tf.compat.v1.summary.scalar('test_mean_loss_main', test_mean_loss_ph)
-                test_loss_summary_arch = tf.compat.v1.summary.scalar('test_mean_loss_arch', test_mean_loss_ph)
+                test_loss_summary_main = tf.compat.v1.summary.scalar(
+                    'test_mean_loss_main', test_mean_loss_ph)
+                test_loss_summary_arch = tf.compat.v1.summary.scalar(
+                    'test_mean_loss_arch', test_mean_loss_ph)
 
                 summaries_main = Summaries(
                     summary_writer=summary_writer,
@@ -295,7 +299,7 @@ class Trainer:
                         for i, v in enumerate(variables):
                             v_softmax_name = v.name.replace('alphas:0', 'Softmax:0')
                             v_val, v_softmax_val = session.run([v, v_softmax_name])
-                            print(
+                            LOGGER.debug(
                                 f"{v.name} \n"
                                 f"\t{v_val},  min={np.min(v_val):.3f}, max={np.max(v_val):.3f} -> \n"
                                 f"\t{v_softmax_val}, min={np.min(v_softmax_val):.3f}, max={np.max(v_softmax_val):.3f}, "
@@ -415,10 +419,12 @@ class Trainer:
             learning_rate_summary_finetune = tf.compat.v1.summary.scalar(
                 'train_learning_rate_finetune', train_operations_finetune.learning_rate)
             loss_summary_finetune = tf.compat.v1.summary.scalar(
-                'train_loss_finetune', train_operations_finetune.loss)
+                # 'train_loss_finetune', train_operations_finetune.loss)
+                'train_loss_finetune', tf.reduce_mean(train_operations_finetune.loss))  # TODO: for vector loss
 
             test_mean_loss_ph = tf.compat.v1.placeholder(tf.float32, ())
-            test_loss_summary_finetune = tf.compat.v1.summary.scalar('test_mean_loss_finetune', test_mean_loss_ph)
+            test_loss_summary_finetune = tf.compat.v1.summary.scalar(
+                'test_mean_loss_finetune', test_mean_loss_ph)
 
             summaries_finetune = Summaries(
                 summary_writer=summary_writer,
@@ -601,7 +607,7 @@ class Trainer:
             trainable_vars = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES)
 
             regularization_loss = tf.losses.get_regularization_loss()
-            print(f"REGULARIZATION_LOSSES:{regularization_loss}")
+            LOGGER.debug(f"REGULARIZATION_LOSSES:{regularization_loss}")
 
             loss = model_loss + regularization_loss
 
@@ -719,8 +725,8 @@ class Trainer:
             save_checkpoints,
     ):
 
-        LOGGER.info(f'Total number of trainable vars {len(train_operations.train_variables)}')
-        LOGGER.info(f'Total number of main optimizer vars {len(train_operations.optimizer_variables)}')
+        LOGGER.debug(f'Total number of trainable vars {len(train_operations.train_variables)}')
+        LOGGER.debug(f'Total number of main optimizer vars {len(train_operations.optimizer_variables)}')
 
         initial_learning_rate = session.run(train_operations.learning_rate)
 
@@ -759,6 +765,7 @@ class Trainer:
                 'loss_summary': loss_summary,
             }
             res = session.run(fetches=fetches, feed_dict=feed_dict)
+            res['loss'] = np.mean(res['loss'])  # TODO: for vector loss
             return res
 
         def _maybe_drop_lr_tolerance(learning_strategy, lr, best_loss, tol_step, tol_best_loss):
@@ -835,6 +842,7 @@ class Trainer:
                 }
 
                 res = session.run(fetches=fetches, feed_dict=feed_dict)
+                res['loss'] = np.mean(res['loss'])  # TODO: for vector loss
                 test_losses.append(res['loss'])
 
             test_mean_loss = np.mean(test_losses)
