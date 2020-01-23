@@ -22,7 +22,38 @@ def build_simulation_dataset(
         how='concat',
         **kwargs,
 ):
-    perform_simulations(
+    """
+    Produce dataset of simulations.
+    Runs Gillespie simulations of selected model w.r.t given
+    parameters (discrete time-step, number of initial settings,
+    and number of simulations for each of the initial settings).
+    Depending on `how` parameter, simulated trajectories are gathered
+    in particularly shaped multi-dimensional array.
+
+    Parameters
+    ----------
+    model_name : string name of CRN model class.
+        *Note*: file containing model class is assumed to have
+        the same name (e.g. 'EGFR.py' and 'class EFGR').
+    nb_settings : number of initial states for simulations.
+        Initial states are (randomly) produced by CRN model class.
+    nb_trajectories : number of trajectories to simulate starting from each of the initial states.
+    timestep : discrete time-step for simulations.
+    endtime : end-time for simulations.
+    dataset_folder : folder to store results and related data, such as initial settings.
+    prefix : string prefix for temporary files.
+    how : string, one of {'concat', 'stack'}. Defines final shape of returned dataset.
+        'concat' is used for training dataset;
+        'stack' - for histogram dataset, so that we can easily build histograms for different initial settings
+
+    Returns
+    -------
+    dataset : np.array
+     of shape (nb_settings * nb_trajectories, number-of-steps, number-of-species) If `how` == 'concat'
+     or       (nb_settings, nb_trajectories, number-of-steps, number-of-species) If `how` == 'stack'
+
+    """
+    _perform_simulations(
         model_name,
         nb_settings,
         nb_trajectories,
@@ -34,11 +65,11 @@ def build_simulation_dataset(
     )
     if how == 'concat':
         LOGGER.info(">>>> starting concatenate_simulations...")
-        dataset = concatenate_simulations(nb_settings, dataset_folder, prefix=prefix)
+        dataset = _concatenate_simulations(nb_settings, dataset_folder, prefix=prefix)
         LOGGER.info(">>>> done...")
     elif how == 'stack':
         LOGGER.info(">>>> starting stack_simulations...")
-        dataset = stack_simulations(nb_settings, dataset_folder, prefix=prefix)
+        dataset = _stack_simulations(nb_settings, dataset_folder, prefix=prefix)
         LOGGER.info(">>>> done...")
     else:
         raise ValueError("'how' accepts only two arguments: "
@@ -46,7 +77,8 @@ def build_simulation_dataset(
     return dataset
 
 
-def concatenate_simulations(nb_settings, dataset_folder, prefix='partial_'):
+def _concatenate_simulations(nb_settings, dataset_folder, prefix='partial_'):
+    """Read temporary files from folder and concatenate containing data."""
     for i in tqdm(range(nb_settings)):
         partial_dataset_filename = str(prefix) + str(i) + '.npy'
         partial_dataset_filepath = os.path.join(
@@ -66,7 +98,8 @@ def concatenate_simulations(nb_settings, dataset_folder, prefix='partial_'):
     return final_dataset
 
 
-def stack_simulations(nb_settings, dataset_folder, prefix='partial_'):
+def _stack_simulations(nb_settings, dataset_folder, prefix='partial_'):
+    """Read temporary files from folder and stack containing data."""
     for i in tqdm(range(nb_settings)):
         partial_dataset_filename = str(prefix) + str(i) + '.npy'
         partial_dataset_filepath = os.path.join(
@@ -86,7 +119,7 @@ def stack_simulations(nb_settings, dataset_folder, prefix='partial_'):
     return final_dataset
 
 
-def perform_simulations(
+def _perform_simulations(
         model_name,
         nb_settings,
         nb_trajectories,
@@ -96,6 +129,7 @@ def perform_simulations(
         prefix='partial_',
         settings_filename='settings.npy',
 ):
+    """Perform simulations, save intermediate results and initial settings to `dataset_folder`."""
     settings_fp = os.path.join(dataset_folder, settings_filename)
     settings = np.load(settings_fp)
 
@@ -110,7 +144,7 @@ def perform_simulations(
     kwargs = [(settings[n], n) for n in range(nb_settings)]
 
     task = partial(
-        single_simulation,
+        _single_simulation,
         crn_instance=crn_instance,
         nb_trajectories=nb_trajectories,
         dataset_folder=dataset_folder,
@@ -122,7 +156,7 @@ def perform_simulations(
     return
 
 
-def single_simulation(
+def _single_simulation(
         initial_values,
         id_number,
         crn_instance,
@@ -130,7 +164,7 @@ def single_simulation(
         dataset_folder,
         prefix,
 ):
-
+    """Helper single-thread function."""
     crn_instance.set_species_initial_value(initial_values)
     trajectories = crn_instance.run(
         number_of_trajectories=nb_trajectories,
@@ -138,18 +172,18 @@ def single_simulation(
         show_labels=False
     )
     data = np.array(trajectories)
-    save_simulation_data(data, dataset_folder, prefix, id_number)
+    _save_simulation_data(data, dataset_folder, prefix, id_number)
 
 
-def save_simulation_data(
+def _save_simulation_data(
         data,
         dataset_folder,
         prefix,
         id_number,
 ):
+    """Save data to `dataset_folder` using `id_number` and `prefix` for the filename."""
     partial_dataset_filename = str(prefix) + str(id_number) + '.npy'
-    partial_dataset_filepath = os.path.join(dataset_folder,
-                                            partial_dataset_filename)
+    partial_dataset_filepath = os.path.join(dataset_folder, partial_dataset_filename)
     LOGGER.info(f"Saving to partial_dataset_filepath: {partial_dataset_filepath}")
     np.save(partial_dataset_filepath, data)
     LOGGER.info("Saved.")

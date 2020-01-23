@@ -2,12 +2,10 @@ import argparse
 import logging
 import numpy as np
 import os
-import pickle
 from time import time
 
 from stochnet_v2.utils.file_organisation import ProjectFileExplorer
 from stochnet_v2.dataset.simulation_kappy import build_simulation_dataset
-from stochnet_v2.dataset.simulation_kappy import get_random_initial_settings
 
 LOGGER = logging.getLogger('scripts.simulate_data_kappy')
 
@@ -45,17 +43,7 @@ def main():
     dataset_explorer = project_explorer.get_dataset_file_explorer(timestep, dataset_id)
 
     settings_filename = 'settings.pickle'
-
-    settings_fp = os.path.join(dataset_explorer.dataset_folder, settings_filename)
     model_fp = os.path.join(project_folder, f'{model_name}.ka')
-
-    with open(model_fp, 'r') as f:
-        model_text = f.read()
-
-    settings = get_random_initial_settings(model_text, var_list, n_settings=nb_settings, sigm=1.0)
-
-    with open(settings_fp, 'wb') as f:
-        pickle.dump(settings, f)
 
     LOGGER.info(f"Dataset folder: {dataset_explorer.dataset_folder}")
 
@@ -66,7 +54,10 @@ def main():
         timestep,
         endtime,
         dataset_explorer.dataset_folder,
-        how='concat'
+        var_list,
+        prefix='partial_',
+        how='concat',
+        settings_filename=settings_filename,
     )
     np.save(dataset_explorer.dataset_fp, dataset)
 
@@ -93,7 +84,7 @@ python stochnet_v2/scripts/simulate_data_kappy.py \
        --project_folder '/home/dn/DATA/LST_kappa_loop' \
        --timestep 100.0 \
        --dataset_id 2 \
-       --var_list 'a_add b_add p0' \
+       --var_list 'a0 b0 p0' \
        --nb_settings 200 \
        --nb_trajectories 200 \
        --endtime 10000 \

@@ -1,12 +1,13 @@
 import argparse
+import logging
 import numpy as np
 import os
-import pickle
 from time import time
 
 from stochnet_v2.utils.file_organisation import ProjectFileExplorer
 from stochnet_v2.dataset.simulation_kappy import build_simulation_dataset
-from stochnet_v2.dataset.simulation_kappy import get_random_initial_settings
+
+LOGGER = logging.getLogger('scripts.simulate_histogram_data_kappy')
 
 
 def main():
@@ -33,6 +34,7 @@ def main():
     model_name = args.model_name
     random_seed = args.random_seed
 
+    LOGGER.info(">>> START")
     start = time()
 
     np.random.seed(random_seed)
@@ -44,17 +46,9 @@ def main():
     )
 
     settings_filename = 'histogram_settings.pickle'
-
-    settings_fp = os.path.join(dataset_explorer.dataset_folder, settings_filename)
     model_fp = os.path.join(project_folder, f'{model_name}.ka')
 
-    with open(model_fp, 'r') as f:
-        model_text = f.read()
-
-    settings = get_random_initial_settings(model_text, var_list, n_settings=nb_settings, sigm=1.0)
-
-    with open(settings_fp, 'wb') as f:
-        pickle.dump(settings, f)
+    LOGGER.info(f"Dataset folder: {dataset_explorer.dataset_folder}")
 
     histogram_dataset = build_simulation_dataset(
         model_fp,
@@ -63,21 +57,26 @@ def main():
         timestep,
         endtime,
         dataset_explorer.dataset_folder,
+        var_list,
         prefix='histogram_partial_',
         how='stack',
         settings_filename=settings_filename,
     )
     np.save(dataset_explorer.histogram_dataset_fp, histogram_dataset)
 
+    LOGGER.info(">>> DONE.")
+
     end = time()
     execution_time = end - start
 
+    msg = f"Simulating {nb_trajectories} {model_name} histogram trajectories "\
+          f"for {nb_settings} different settings until {endtime} "\
+          f"took {execution_time} seconds.\n"
+
     with open(dataset_explorer.log_fp, 'a') as file:
-        file.write(
-            f"Simulating {nb_trajectories} {model_name} histogram trajectories "
-            f"for {nb_settings} different settings until {endtime} "
-            f"took {execution_time} seconds.\n"
-        )
+        file.write(msg)
+
+    LOGGER.info(msg)
 
 
 if __name__ == '__main__':
@@ -89,7 +88,7 @@ python stochnet_v2/scripts/simulate_histogram_data_kappy.py \
        --project_folder='/home/dn/DATA/LST_kappa_loop' \
        --timestep=100.0 \
        --dataset_id=2 \
-       --var_list='a_add b_add p0' \
+       --var_list='a0 b0 p0' \
        --nb_settings=25 \
        --nb_trajectories=10000 \
        --endtime=10000 \
