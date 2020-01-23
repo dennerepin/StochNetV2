@@ -1,9 +1,8 @@
 import tensorflow as tf
 
 from stochnet_v2.dynamic_classes.op_registry import OP_REGISTRY
-# from stochnet_v2.dynamic_classes.op_registry import simple_dense as expand_op
-from stochnet_v2.dynamic_classes.op_registry import _expand_identity as expand_op
-from stochnet_v2.dynamic_classes.util import expand_cell
+from stochnet_v2.dynamic_classes.nn_body_search import expand_op
+from stochnet_v2.dynamic_classes.util import cell_is_expanding
 
 
 def cell(
@@ -90,7 +89,7 @@ def body(x, genotypes, expansion_multiplier):
     expand_prev = False
 
     for n in range(n_cells):
-        expand = expand_cell(n, n_cells)
+        expand = cell_is_expanding(n, n_cells)
         s0, s1 = s1, cell(s0, s1, genotypes[n], expand, expand_prev, expansion_multiplier, n)
         expand_prev = expand
 

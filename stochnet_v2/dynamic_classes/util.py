@@ -10,7 +10,7 @@ initializer = tf.initializers.glorot_normal
 
 
 def preprocess(layer_input):
-    return layer_preprocess(layer_input, 'none', 0.1, 'layer', 1e-4)  # 'none'
+    return layer_preprocess(layer_input, 'none', 0.1, 'l2', 1e-4)  # 'none'
 
 
 def postprocess(layer_output):
@@ -21,7 +21,7 @@ def postprocess(layer_output):
 #     return layer_postprocess(layer_input, layer_output, 'n', 0.1, 'layer', 1e-4)  # 'an'
 
 
-def expand_cell(n, n_cells):
+def cell_is_expanding(n, n_cells):
     if n_cells >= 4:
         if n in [n_cells // 3, 2 * n_cells // 3]:
             expand = True

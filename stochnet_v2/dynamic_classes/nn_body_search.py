@@ -5,18 +5,25 @@ import tensorflow_probability as tfp
 
 from stochnet_v2.dynamic_classes.op_registry import OP_REGISTRY
 # from stochnet_v2.dynamic_classes.op_registry import simple_dense as expand_op
-from stochnet_v2.dynamic_classes.op_registry import _expand_identity as expand_op
+# from stochnet_v2.dynamic_classes.op_registry import _expand_identity as expand_op
+from stochnet_v2.dynamic_classes.op_registry import simple_dense
+from stochnet_v2.dynamic_classes.op_registry import _expand_identity
 from stochnet_v2.dynamic_classes.genotypes import Genotype
 from stochnet_v2.dynamic_classes.genotypes import PRIMITIVES
-from stochnet_v2.dynamic_classes.util import expand_cell
+from stochnet_v2.dynamic_classes.util import cell_is_expanding
 from stochnet_v2.dynamic_classes.util import l1_regularizer
 from stochnet_v2.dynamic_classes.util import l2_regularizer
 
 
 tfd = tfp.distributions
 
-
 LOGGER = logging.getLogger('dynamic_classes.nn_body_search')
+
+
+def expand_op(x, multiplier):
+    if multiplier != 1.:
+       return simple_dense(x, multiplier)
+    return _expand_identity(x, multiplier)
 
 
 def mixed_op(x, expansion_coeff, **kwargs):
@@ -72,7 +79,7 @@ def mixed_op_cat(x, expansion_coeff, **kwargs):
             trainable=True,
         )
         alphas = tf.nn.softmax(alphas)
-        alphas_reg_loss = - l2_regularizer(alphas, 0.01)
+        alphas_reg_loss = - l2_regularizer(alphas, 0.005)
         tf.compat.v1.add_to_collection('architecture_regularization_losses', alphas_reg_loss)
 
     outputs = []
@@ -159,7 +166,7 @@ def body(
     expand_prev = False
 
     for n in range(n_cells):
-        expand = expand_cell(n, n_cells)
+        expand = cell_is_expanding(n, n_cells)
         s0, s1 = s1, cell(
             s0,
             s1,
@@ -248,7 +255,7 @@ def get_genotypes(
     genotypes = []
 
     for n in range(n_cells):
-        expand = expand_cell(n, n_cells)
+        expand = cell_is_expanding(n, n_cells)
         states_reduce = list(range(cell_size + 2 - n_states_reduce, cell_size + 2))
         gene = _parse(expand, n)
         if expand:

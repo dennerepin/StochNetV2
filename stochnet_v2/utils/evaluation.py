@@ -213,7 +213,7 @@ def evaluate(
         dataset_id,
         model_id,
         nb_past_timesteps=1,
-        n_bins=50,
+        n_bins=100,
         distance_kind='iou',
         with_timestamps=True,
         save_histograms=True,
@@ -297,7 +297,7 @@ def evaluate(
     mean_dist_fig_path = os.path.join(histogram_explorer.histogram_folder, os.path.pardir, f'mean_{distance_kind}')
     spec_dist_fig_path = os.path.join(histogram_explorer.histogram_folder, os.path.pardir, f'spec_{distance_kind}')
 
-    fig = plt.figure(figsize=(16, 10))
+    fig = plt.figure(figsize=(12, 8))
     plt.title(f"Mean {distance_kind} distance (averaged over all species and {n_settings} settings)")
     plt.plot(mean_distances)
     plt.xlabel('time lag')
@@ -305,7 +305,7 @@ def evaluate(
     plt.savefig(mean_dist_fig_path)
     plt.close(fig)
 
-    fig = plt.figure(figsize=(16, 10))
+    fig = plt.figure(figsize=(12, 8))
     plt.title(f"Mean {distance_kind} distances (averaged over {n_settings} settings)")
     for i in range(species_distances.shape[-1]):
         plt.plot(species_distances[:, i], label=target_species_names[i])

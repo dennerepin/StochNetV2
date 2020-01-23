@@ -29,6 +29,7 @@ def main():
     parser.add_argument('--batch_size', type=int, default=512)
     parser.add_argument('--add_noise', type=str, default='false', choices=['true', 'false', 'True', 'False'])
     parser.add_argument('--stddev', type=float, default=0.01)
+    parser.add_argument('--dataset_kind', type=str, default='hdf5')
 
     args = parser.parse_args()
 
@@ -51,7 +52,7 @@ def main():
     add_noise = str_to_bool(args.add_noise)
     stddev = args.stddev
 
-    dataset_kind = 'hdf5'
+    dataset_kind = args.dataset_kind
     learning_strategy_main = None
     learning_strategy_arch = None
     learning_strategy_finetune = None

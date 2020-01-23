@@ -89,9 +89,9 @@ python stochnet_v2/scripts/simulate_histogram_data_kappy.py \
        --project_folder='/home/dn/DATA/LST_kappa_loop' \
        --timestep=100.0 \
        --dataset_id=2 \
-       --var_list='a_add p0' \
-       --nb_settings=2 \
-       --nb_trajectories=10 \
+       --var_list='a_add b_add p0' \
+       --nb_settings=25 \
+       --nb_trajectories=10000 \
        --endtime=10000 \
        --model_name='LST_kappa_loop' \
        --random_seed=44

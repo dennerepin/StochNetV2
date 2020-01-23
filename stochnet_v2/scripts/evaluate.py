@@ -47,7 +47,7 @@ def main():
         dataset_id=dataset_id,
         model_id=model_id,
         nb_past_timesteps=nb_past_timesteps,
-        n_bins=200,
+        n_bins=100,
         distance_kind=distance_kind,
         with_timestamps=True,
         save_histograms=True,

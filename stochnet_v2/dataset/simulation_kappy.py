@@ -63,7 +63,7 @@ def perform_simulations(
     with open(settings_fp, 'rb') as f:
         settings = pickle.load(f)
 
-    count = (multiprocessing.cpu_count() // 3) * 2 + 1
+    count = (multiprocessing.cpu_count() // 3) * 2
     LOGGER.info(" ===== CPU Cores used for simulations: %s =====" % count)
     pool = multiprocessing.Pool(processes=count)
 
@@ -113,7 +113,7 @@ def single_simulation(
     min_length = min([t.shape[0] for t in data])
     data = np.stack([t[:min_length] for t in data], axis=0)
 
-    print(f' - {id_number} Data shape: {data.shape}')
+    # print(f' - {id_number} Data shape: {data.shape}')
     save_simulation_data(data, dataset_folder, prefix, id_number)
 
 

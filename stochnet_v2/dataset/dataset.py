@@ -581,7 +581,37 @@ class HDF5Dataset(BaseDataset):
             shuffle=shuffle,
         )
 
+    # def __iter__(self):
+    #     """Iterating with effective batch-wise shuffling."""
+    #     bs = self.batch_size
+    #
+    #     with h5py.File(self._data_file_path, 'r', libver='latest') as df:
+    #         x = df['x']
+    #         y = df['y']
+    #         n_examples = x.shape[0]
+    #         n_batches = n_examples // bs
+    #
+    #         batch_idxs = np.arange(0, n_batches)
+    #
+    #         if self._shuffle:
+    #             np.random.shuffle(batch_idxs)
+    #
+    #         for batch_idx in batch_idxs:
+    #             start = batch_idx * bs
+    #             end = (batch_idx + 1) * bs
+    #             x_batch, y_batch = x[start:end], y[start:end]
+    #             if self._preprocess_fn is not None:
+    #                 x_batch, y_batch = self._preprocess_fn(x_batch, y_batch)
+    #             yield x_batch, y_batch
+    #
+    #         if self._drop_remainder is False:
+    #             x_batch, y_batch = x[n_batches * bs:-1], y[n_batches * bs:-1]
+    #             if self._preprocess_fn is not None:
+    #                 x_batch, y_batch = self._preprocess_fn(x_batch, y_batch)
+    #             yield x_batch, y_batch
+
     def __iter__(self):
+        """Iterating with slower but better example-wise shuffling."""
         bs = self.batch_size
 
         with h5py.File(self._data_file_path, 'r', libver='latest') as df:
@@ -590,21 +620,24 @@ class HDF5Dataset(BaseDataset):
             n_examples = x.shape[0]
             n_batches = n_examples // bs
 
+            data_idxs = np.arange(0, n_examples)
             batch_idxs = np.arange(0, n_batches)
 
             if self._shuffle:
-                np.random.shuffle(batch_idxs)
+                np.random.shuffle(data_idxs)
 
             for batch_idx in batch_idxs:
                 start = batch_idx * bs
                 end = (batch_idx + 1) * bs
-                x_batch, y_batch = x[start:end], y[start:end]
+                idxs = data_idxs[start:end]
+                x_batch, y_batch = x.value[idxs], y.value[idxs]
                 if self._preprocess_fn is not None:
                     x_batch, y_batch = self._preprocess_fn(x_batch, y_batch)
                 yield x_batch, y_batch
 
             if self._drop_remainder is False:
-                x_batch, y_batch = x[n_batches * bs:-1], y[n_batches * bs:-1]
+                idxs = data_idxs[n_batches * bs:-1]
+                x_batch, y_batch = x.value[idxs], y.value[idxs]
                 if self._preprocess_fn is not None:
                     x_batch, y_batch = self._preprocess_fn(x_batch, y_batch)
                 yield x_batch, y_batch
@@ -618,7 +651,7 @@ class TFRecordsDataset(BaseDataset):
             batch_size,
             prefetch_size=None,
             shuffle=True,
-            shuffle_buffer_size=10000,
+            shuffle_buffer_size=100000,
             nb_past_timesteps=None,
             nb_features=None,
             preprocess_fn=None,
@@ -646,7 +679,7 @@ class TFRecordsDataset(BaseDataset):
         else:
             self._parse_record = self._parse_record_unknown_lengths
 
-        self._prefetch_size = prefetch_size or -1
+        self._prefetch_size = prefetch_size or batch_size * 2  # -1
         self._shuffle_buffer_size = shuffle_buffer_size
         self._preprocess_fn = preprocess_fn
 

@@ -80,11 +80,17 @@ class FormatDataset(ExternalProgramTask):
     def output(self):
         project_explorer = ProjectFileExplorer(self.project_folder)
         dataset_explorer = project_explorer.get_dataset_file_explorer(self.timestep, self.dataset_id)
+        if self.save_format == 'hdf5':
+            cond = 1
+        elif self.save_format == 'tfrecord':
+            cond = 0
+        else:
+            raise ValueError(f'save_format parameter not recognized: {self.save_format}, should be `hdf5` or `tfrecord`')
         return [
-            luigi.LocalTarget(dataset_explorer.train_fp),
-            luigi.LocalTarget(dataset_explorer.test_fp),
-            luigi.LocalTarget(dataset_explorer.train_rescaled_fp),
-            luigi.LocalTarget(dataset_explorer.test_rescaled_fp),
+            luigi.LocalTarget(dataset_explorer.train_fp if cond else dataset_explorer.train_records_fp),
+            luigi.LocalTarget(dataset_explorer.test_fp if cond else dataset_explorer.test_records_fp),
+            luigi.LocalTarget(dataset_explorer.train_rescaled_fp if cond else dataset_explorer.train_records_rescaled_fp),
+            luigi.LocalTarget(dataset_explorer.test_rescaled_fp if cond else dataset_explorer.test_records_rescaled_fp),
             luigi.LocalTarget(dataset_explorer.scaler_fp),
             luigi.LocalTarget(dataset_explorer.log_fp)
         ]
@@ -205,6 +211,7 @@ class TrainSearch(ExternalProgramTask):
             f'--batch_size={self.batch_size}',
             f'--add_noise={self.add_noise}',
             f'--stddev={self.stddev}',
+            f'--dataset_kind={self.save_format}',
         ]
 
     def output(self):
