@@ -21,6 +21,7 @@ class DataTransformer:
             self,
             dataset_address,
             with_timestamps=True,
+            nb_randomized_params=0,
     ):
         """
         Initialize transformer.
@@ -39,6 +40,7 @@ class DataTransformer:
         self.labels = None
         self.with_labels = False
         self.with_timestamps = with_timestamps
+        self.nb_randomized_params = nb_randomized_params
 
         self._scaler = None
         self.scaler_is_fitted = False
@@ -158,9 +160,17 @@ class DataTransformer:
         """
         # return self.scaler.transform(data)
         if isinstance(self.scaler, StandardScaler):
-            data = (data - self.scaler.mean_) / self.scaler.scale_
+            try:
+                data = (data - self.scaler.mean_) / self.scaler.scale_
+            except ValueError:
+                data = (data - self.scaler.mean_[:-self.nb_randomized_params]) \
+                       / self.scaler.scale_[:-self.nb_randomized_params]
         elif isinstance(self.scaler, MinMaxScaler):
-            data = (data * self.scaler.scale_) + self.scaler.min_
+            try:
+                data = (data * self.scaler.scale_) + self.scaler.min_
+            except ValueError:
+                data = (data * self.scaler.scale_[:-self.nb_randomized_params]) \
+                       + self.scaler.min_[:-self.nb_randomized_params]
         return data
 
     def scale_back(self, data):
@@ -177,9 +187,17 @@ class DataTransformer:
         """
         # return self.scaler.inverse_transform(data)
         if isinstance(self.scaler, StandardScaler):
-            data = data * self.scaler.scale_ + self.scaler.mean_
+            try:
+                data = data * self.scaler.scale_ + self.scaler.mean_
+            except ValueError:
+                data = data * self.scaler.scale_[:-self.nb_randomized_params] \
+                       + self.scaler.mean_[:-self.nb_randomized_params]
         elif isinstance(self.scaler, MinMaxScaler):
-            data = (data - self.scaler.min_) / self.scaler.scale_
+            try:
+                data = (data - self.scaler.min_) / self.scaler.scale_
+            except ValueError:
+                data = (data - self.scaler.min_[:-self.nb_randomized_params]) \
+                       / self.scaler.scale_[:-self.nb_randomized_params]
         return data
 
     def _shuffle_data(self):
@@ -389,8 +407,8 @@ class DataTransformer:
             )
             df.create_dataset(
                 'y',
-                shape=(0, self.nb_features),
-                maxshape=(None, self.nb_features),
+                shape=(0, self.nb_features - self.nb_randomized_params),
+                maxshape=(None, self.nb_features - self.nb_randomized_params),
                 chunks=True,
             )
             for x, y in train_gen:
@@ -399,10 +417,10 @@ class DataTransformer:
                 df['x'][-n_new_items:] = x
                 
                 df['y'].resize(df['y'].shape[0] + n_new_items, axis=0)
-                df['y'][-n_new_items:] = y
+                df['y'][-n_new_items:] = y[..., :-self.nb_randomized_params]
 
             LOGGER.info(f"Train data saved to {train_fp}, \n"
-                  f"Shapes: x: {df['x'].shape}, y: {df['y'].shape}")
+                        f"Shapes: x: {df['x'].shape}, y: {df['y'].shape}")
 
         with h5py.File(test_fp, 'a', libver='latest') as df:
             df.create_dataset(
@@ -413,8 +431,8 @@ class DataTransformer:
             )
             df.create_dataset(
                 'y',
-                shape=(0, self.nb_features),
-                maxshape=(None, self.nb_features),
+                shape=(0, self.nb_features - self.nb_randomized_params),
+                maxshape=(None, self.nb_features - self.nb_randomized_params),
                 chunks=True,
             )
             for x, y in test_gen:
@@ -423,10 +441,10 @@ class DataTransformer:
                 df['x'][-n_new_items:] = x
 
                 df['y'].resize(df['y'].shape[0] + n_new_items, axis=0)
-                df['y'][-n_new_items:] = y
+                df['y'][-n_new_items:] = y[..., :-self.nb_randomized_params]
 
             LOGGER.info(f"Test data saved to {test_fp}, \n"
-                  f"Shapes: x: {df['x'].shape}, y: {df['y'].shape}")
+                        f"Shapes: x: {df['x'].shape}, y: {df['y'].shape}")
 
     def save_data_for_ml_tfrecord(
             self,

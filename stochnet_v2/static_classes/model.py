@@ -71,6 +71,7 @@ class StochNet:
             self,
             nb_past_timesteps,
             nb_features,
+            nb_randomized_params,
             project_folder,
             timestep,
             dataset_id,
@@ -82,6 +83,7 @@ class StochNet:
     ):
         self.nb_past_timesteps = nb_past_timesteps
         self.nb_features = nb_features
+        self.nb_randomized_params = nb_randomized_params
         self.timestep = timestep
 
         self.project_explorer = ProjectFileExplorer(project_folder)
@@ -172,13 +174,16 @@ class StochNet:
 
     def _build_main_graph(self, body_fn, mixture_config):
         self.input_placeholder = tf.compat.v1.placeholder(
-            tf.float32, (None, self.nb_past_timesteps, self.nb_features), name="input"
+            tf.float32, (None, self.nb_past_timesteps, self.nb_features + self.nb_randomized_params), name="input"
         )
         self.rv_output_ph = tf.compat.v1.placeholder(
             tf.float32, (None, self.nb_features), name="random_variable_output"
         )
         body = body_fn(self.input_placeholder)
-        self.top_layer_obj = _get_mixture(mixture_config, sample_space_dimension=self.nb_features)
+        self.top_layer_obj = _get_mixture(
+            mixture_config,
+            sample_space_dimension=self.nb_features
+        )
         self.pred_tensor = self.top_layer_obj.add_layer_on_top(body)
         self.loss = self.top_layer_obj.loss_function(self.rv_output_ph, self.pred_tensor)
 
@@ -392,16 +397,32 @@ class StochNet:
 
     def rescale(self, data):
         if isinstance(self.scaler, StandardScaler):
-            data = (data - self.scaler.mean_) / self.scaler.scale_
+            try:
+                data = (data - self.scaler.mean_) / self.scaler.scale_
+            except ValueError:
+                data = (data - self.scaler.mean_[:-self.nb_randomized_params]) \
+                       / self.scaler.scale_[:-self.nb_randomized_params]
         elif isinstance(self.scaler, MinMaxScaler):
-            data = (data * self.scaler.scale_) + self.scaler.min_
+            try:
+                data = (data * self.scaler.scale_) + self.scaler.min_
+            except ValueError:
+                data = (data * self.scaler.scale_[:-self.nb_randomized_params]) \
+                       + self.scaler.min_[:-self.nb_randomized_params]
         return data
 
     def scale_back(self, data):
         if isinstance(self.scaler, StandardScaler):
-            data = data * self.scaler.scale_ + self.scaler.mean_
+            try:
+                data = data * self.scaler.scale_ + self.scaler.mean_
+            except ValueError:
+                data = data * self.scaler.scale_[:-self.nb_randomized_params] \
+                       + self.scaler.mean_[:-self.nb_randomized_params]
         elif isinstance(self.scaler, MinMaxScaler):
-            data = (data - self.scaler.min_) / self.scaler.scale_
+            try:
+                data = (data - self.scaler.min_) / self.scaler.scale_
+            except ValueError:
+                data = (data - self.scaler.min_[:-self.nb_randomized_params]) \
+                       / self.scaler.scale_[:-self.nb_randomized_params]
         return data
 
     def predict(self, curr_state_values):
@@ -478,29 +499,41 @@ class StochNet:
         curr_state_values = np.tile(curr_state_values, [n_traces, 1, 1])  # (n_settings * n_traces, *state_shape)
         traces[0] = curr_state_values
 
-        zero_level = self.rescale(np.zeros(traces[0].shape))
+        zero_level = self.rescale(np.zeros(traces[0, ..., :-self.nb_randomized_params].shape))
 
         n_batches = n_settings * n_traces // batch_size
         remainder = n_settings * n_traces % batch_size != 0
 
         for step_num in tqdm(range(n_steps)):
             for n in range(n_batches):
-                traces[step_num + 1, n * batch_size: (n + 1) * batch_size] = self.next_state(
+                next_state = self.next_state(
                     traces[step_num, n * batch_size: (n + 1) * batch_size],
                     curr_state_rescaled=True,
                     scale_back_result=False,
                     round_result=False,
-                    n_samples=1,
-                )
+                    n_samples=1)
+                params = np.expand_dims(
+                    traces[step_num, n * batch_size: (n + 1) * batch_size, ..., -self.nb_randomized_params:], 0)
+
+                traces[step_num + 1, n * batch_size: (n + 1) * batch_size] = \
+                    np.concatenate([next_state, params], -1)
+
             if remainder:
-                traces[step_num + 1, n_settings * n_traces:] = self.next_state(
-                    traces[step_num, n_settings * n_traces:],
+                next_state = self.next_state(
+                    traces[step_num, n_batches * batch_size:],
                     curr_state_rescaled=True,
                     scale_back_result=False,
                     round_result=False,
                     n_samples=1,
                 )
-            traces[step_num + 1] = np.maximum(zero_level, traces[step_num + 1])
+                params = np.expand_dims(
+                    traces[step_num, n_batches * batch_size:, ..., -self.nb_randomized_params:], 0)
+
+                traces[step_num + 1, n_batches * batch_size:] =  \
+                    np.concatenate([next_state, params], -1)
+
+            traces[step_num + 1, ..., :-self.nb_randomized_params] = \
+                np.maximum(traces[step_num + 1, ..., :-self.nb_randomized_params], zero_level)
 
         traces = np.reshape(traces, traces_final_shape)
         traces = np.squeeze(traces, axis=-2)
@@ -508,7 +541,7 @@ class StochNet:
         if scale_back_result:
             traces = self.scale_back(traces)
             if round_result:
-                traces = np.around(traces)
+                traces[..., :-self.nb_randomized_params] = np.around(traces[..., :-self.nb_randomized_params])
 
         # [n_steps, n_traces, n_settings, nb_features] -> [n_settings, n_traces, n_steps, nb_features]
         traces = np.transpose(traces, (2, 1, 0, 3))
@@ -517,6 +550,8 @@ class StochNet:
             timespan = np.arange(0, (n_steps + 1) * self.timestep, self.timestep)
             timespan = np.tile(timespan, reps=(n_settings, n_traces, 1))
             timespan = timespan[..., np.newaxis]
+            print(traces.shape)
+            print(timespan.shape)
             traces = np.concatenate([timespan, traces], axis=-1)
 
         return traces
