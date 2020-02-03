@@ -493,8 +493,8 @@ class StochNet:
                     n_samples=1,
                 )
             if remainder:
-                traces[step_num + 1, n_settings * n_traces:] = self.next_state(
-                    traces[step_num, n_settings * n_traces:],
+                traces[step_num + 1, n_batches * batch_size:] = self.next_state(
+                    traces[step_num, n_batches * batch_size:],
                     curr_state_rescaled=True,
                     scale_back_result=False,
                     round_result=False,
