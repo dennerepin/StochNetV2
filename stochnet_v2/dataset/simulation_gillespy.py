@@ -196,12 +196,8 @@ def _single_simulation(
 
     if params_dict is not None:
         vals = np.array(list(params_dict.values()))
-        print(f'vals: {vals.shape}')
-
         x = np.ones(list(data.shape[:-1]) + [1]) * vals
-        print(f'x: {x.shape}')
         data = np.concatenate([data, x], axis=-1)
-        print(f'data: {data.shape}')
 
     _save_simulation_data(data, dataset_folder, prefix, id_number)
 

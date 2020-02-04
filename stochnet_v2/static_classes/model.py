@@ -484,6 +484,7 @@ class StochNet:
             scale_back_result=True,
             round_result=False,
             add_timestamps=False,
+            keep_params=False,
             batch_size=150,
     ):
         n_settings, *state_shape = curr_state_values.shape
@@ -547,12 +548,13 @@ class StochNet:
         traces = np.transpose(traces, (2, 1, 0, 3))
 
         if add_timestamps:
-            timespan = np.arange(0, (n_steps + 1) * self.timestep, self.timestep)
+            timespan = np.arange(0, (n_steps+1) * self.timestep, self.timestep)[:n_steps+1]
             timespan = np.tile(timespan, reps=(n_settings, n_traces, 1))
             timespan = timespan[..., np.newaxis]
-            print(traces.shape)
-            print(timespan.shape)
             traces = np.concatenate([timespan, traces], axis=-1)
+
+        if not keep_params:
+            traces = traces[..., :-self.nb_randomized_params]
 
         return traces
 

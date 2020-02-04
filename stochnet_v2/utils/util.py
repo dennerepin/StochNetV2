@@ -87,15 +87,30 @@ def get_cmap(n, name='hsv'):
 def _single_trace(
         setting,
         gillespy_model,
+        params_to_randomize,
         traj_per_setting,
 ):
+    nb_randomized_params = len(params_to_randomize)
+    params = setting[-nb_randomized_params:]
+    setting = setting[:-nb_randomized_params]
+    param_dict = dict(zip(params_to_randomize, params))
+
     gillespy_model.set_species_initial_value(setting)
+    gillespy_model.set_parameters(param_dict)
+
     traces = gillespy_model.run(number_of_trajectories=traj_per_setting, show_labels=False)
     traces = np.array(traces)
     return traces
 
 
-def generate_gillespy_traces(settings, step_to, timestep, gillespy_model, traj_per_setting=10):
+def generate_gillespy_traces(
+        settings,
+        step_to,
+        timestep,
+        gillespy_model,
+        params_to_randomize,
+        traj_per_setting=10,
+):
     endtime = int(step_to * timestep)
     nb_of_steps = int(math.ceil((endtime / timestep))) + 1
     gillespy_model.timespan(np.linspace(0, endtime, nb_of_steps))
@@ -108,6 +123,7 @@ def generate_gillespy_traces(settings, step_to, timestep, gillespy_model, traj_p
     task = partial(
         _single_trace,
         gillespy_model=gillespy_model,
+        params_to_randomize=params_to_randomize,
         traj_per_setting=traj_per_setting,
     )
 
