@@ -19,6 +19,8 @@ class GlobalParams(luigi.Config):
     endtime = luigi.FloatParameter()
     nb_past_timesteps = luigi.IntParameter()
     random_seed = luigi.IntParameter()
+    params_to_randomize = luigi.Parameter()
+    nb_randomized_params = luigi.IntParameter()
 
 
 @inherits(GlobalParams)
@@ -41,6 +43,7 @@ class GenerateDataset(ExternalProgramTask):
             f'--nb_trajectories={self.nb_trajectories}',
             f'--endtime={self.endtime}',
             f'--model_name={self.model_name}',
+            f'--params_to_randomize={self.params_to_randomize}',
             f'--random_seed={self.random_seed}',
         ]
 
@@ -71,6 +74,7 @@ class FormatDataset(ExternalProgramTask):
             f'--timestep={self.timestep}',
             f'--dataset_id={self.dataset_id}',
             f'--nb_past_timesteps={self.nb_past_timesteps}',
+            f'--nb_randomized_params={self.nb_randomized_params}',
             f'--positivity={self.positivity}',
             f'--test_fraction={self.test_fraction}',
             f'--save_format={self.save_format}',
@@ -84,6 +88,7 @@ class FormatDataset(ExternalProgramTask):
             cond = 1
         elif self.save_format == 'tfrecord':
             cond = 0
+            raise ValueError(f'Save_format {self.save_format} is not supported yet.')
         else:
             raise ValueError(f'save_format parameter not recognized: {self.save_format}, should be `hdf5` or `tfrecord`')
         return [
@@ -116,6 +121,7 @@ class GenerateHistogramData(ExternalProgramTask):
             f'--nb_trajectories={self.nb_histogram_trajectories}',
             f'--endtime={self.histogram_endtime}',
             f'--model_name={self.model_name}',
+            f'--params_to_randomize={self.params_to_randomize}',
             f'--random_seed={self.random_seed}',
         ]
 
@@ -153,6 +159,7 @@ class TrainStatic(ExternalProgramTask):
             f'--model_id={self.model_id}',
             f'--nb_features={self.nb_features}',
             f'--nb_past_timesteps={self.nb_past_timesteps}',
+            f'--nb_randomized_params={self.nb_randomized_params}',
             f'--body_config_path={self.body_config_path}',
             f'--mixture_config_path={self.mixture_config_path}',
             f'--n_epochs={self.n_epochs}',
@@ -201,6 +208,7 @@ class TrainSearch(ExternalProgramTask):
             f'--model_id={self.model_id}',
             f'--nb_features={self.nb_features}',
             f'--nb_past_timesteps={self.nb_past_timesteps}',
+            f'--nb_randomized_params={self.nb_randomized_params}',
             f'--body_config_path={self.body_config_path}',
             f'--mixture_config_path={self.mixture_config_path}',
             f'--n_epochs_main={self.n_epochs_main}',
@@ -239,11 +247,13 @@ class Evaluate(ExternalProgramTask):
     dataset_id = luigi.IntParameter()
     model_name = luigi.Parameter()
     nb_past_timesteps = luigi.IntParameter()
+    nb_randomized_params = luigi.IntParameter()
 
     def requires(self):
         return [
             GenerateHistogramData(),
             TrainSearch()
+            # TrainStatic()
         ]
 
     def program_args(self):
@@ -258,6 +268,7 @@ class Evaluate(ExternalProgramTask):
             f'--model_id={self.model_id}',
             f'--model_name={self.model_name}',
             f'--nb_past_timesteps={self.nb_past_timesteps}',
+            f'--nb_randomized_params={self.nb_randomized_params}',
             f'--distance_kind={self.distance_kind}',
             f'--target_species_names={self.target_species_names}',
             f'--time_lag_range={self.time_lag_range}',

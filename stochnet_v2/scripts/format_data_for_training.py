@@ -13,6 +13,7 @@ def main():
     parser.add_argument('--timestep', type=float, required=True)
     parser.add_argument('--dataset_id', type=int, required=True)
     parser.add_argument('--nb_past_timesteps', type=int, default=1)
+    parser.add_argument('--nb_randomized_params', type=int, required=True)
     parser.add_argument('--positivity', type=str, default='true')
     parser.add_argument('--test_fraction', type=float, default=0.125)
     parser.add_argument('--save_format', type=str, default='hdf5', choices=['hdf5', 'tfrecord'])
@@ -23,6 +24,7 @@ def main():
     timestep = args.timestep
     dataset_id = args.dataset_id
     nb_past_timesteps = args.nb_past_timesteps
+    nb_randomized_params = args.nb_randomized_params
     positivity = args.positivity
     test_fraction = args.test_fraction
     save_format = args.save_format
@@ -33,14 +35,18 @@ def main():
     project_explorer = ProjectFileExplorer(project_folder)
     dataset_explorer = project_explorer.get_dataset_file_explorer(timestep, dataset_id)
 
-    dt = DataTransformer(dataset_explorer.dataset_fp)
+    dt = DataTransformer(
+        dataset_explorer.dataset_fp,
+        with_timestamps=True,
+        nb_randomized_params=nb_randomized_params
+    )
 
     if save_format == 'hdf5':
         save_fn = dt.save_data_for_ml_hdf5
-    elif save_format == 'tfrecord':
-        save_fn = dt.save_data_for_ml_tfrecord
+    # elif save_format == 'tfrecord':
+    #     save_fn = dt.save_data_for_ml_tfrecord
     else:
-        raise ValueError(f"save_format `{save_format}` not recognized")
+        raise ValueError(f"save_format `{save_format}` not recognized. Use 'hdf5'.")
 
     positivity = str_to_bool(positivity)
 
@@ -87,10 +93,11 @@ if __name__ == '__main__':
 
 """
 python stochnet_v2/scripts/format_data_for_training.py \
-       --project_folder='/home/dn/DATA/EGFR' \
-       --timestep=0.2 \
-       --dataset_id=1 \
+       --project_folder='/home/dn/DATA/SIR' \
+       --timestep=0.5 \
+       --dataset_id=3 \
        --nb_past_timesteps=1 \
+       --nb_randomized_params=2 \
        --positivity=true \
        --test_fraction=0.2 \
        --save_format='hdf5' \

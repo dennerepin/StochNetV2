@@ -22,7 +22,7 @@ LOGGER = logging.getLogger('dynamic_classes.nn_body_search')
 
 def expand_op(x, multiplier):
     if multiplier != 1.:
-       return simple_dense(x, multiplier)
+        return simple_dense(x, multiplier)
     return _expand_identity(x, multiplier)
 
 

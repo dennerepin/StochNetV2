@@ -7,6 +7,7 @@ from stochnet_v2.CRN_models.base import BaseCRNModel
 
 class SIR(BaseCRNModel):
     """Class for SIR network."""
+
     params = {
         'beta': '3.',
         'gamma': '1.',
@@ -144,20 +145,20 @@ class SIR(BaseCRNModel):
         """
         return ['S', 'I']
 
-    @classmethod
-    def get_randomized_parameters(cls, param_names, n_settings, sigm=0.5):
-        randomized = {}
-        for name in param_names:
-            if name not in cls.params:
-                raise KeyError(f"Could not find param {name} in {cls.__name__} class `params` dict.")
-            val = float(cls.params[name])
-
-            randomized[name] = np.random.uniform(val * (1. - sigm), val * (1. + sigm), n_settings)
-        return randomized
-
-    def set_parameters(self, params_dict):
-        for name, val in params_dict.items():
-            if name not in self.listOfParameters:
-                raise KeyError(
-                    f"Could not find {name} parameter in {self.__class__.__name__} model listOfParameters.")
-            self.set_parameter(name, str(val))
+    # @classmethod
+    # def get_randomized_parameters(cls, param_names, n_settings, sigm=0.5):
+    #     randomized = {}
+    #     for name in param_names:
+    #         if name not in cls.params:
+    #             raise KeyError(f"Could not find param {name} in {cls.__name__} class `params` dict.")
+    #         val = float(cls.params[name])
+    #
+    #         randomized[name] = np.random.uniform(val * (1. - sigm), val * (1. + sigm), n_settings)
+    #     return randomized
+    #
+    # def set_parameters(self, params_dict):
+    #     for name, val in params_dict.items():
+    #         if name not in self.listOfParameters:
+    #             raise KeyError(
+    #                 f"Could not find {name} parameter in {self.__class__.__name__} model listOfParameters.")
+    #         self.set_parameter(name, str(val))
