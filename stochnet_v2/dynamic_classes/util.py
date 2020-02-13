@@ -29,7 +29,7 @@ def cell_is_expanding(n, n_cells):
             expand = False
 
     elif n_cells == 3:
-        if n in [0, 1]:
+        if n in [0]:  # TODO: if n in [0, 1]:
             expand = True
         else:
             expand = False

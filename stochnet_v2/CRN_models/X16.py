@@ -9,6 +9,14 @@ class X16(BaseCRNModel):
     Class for (16) model defined in https://arxiv.org/pdf/1801.09200.pdf.
     For training: timestep=20.0, endtime=200.
     """
+
+    params = {
+        'a11': 100.0,
+        'a12': 2.0,
+        'a21': 500.0,
+        'b1': 2.0,
+    }
+
     def __init__(
             self,
             endtime,
@@ -36,10 +44,10 @@ class X16(BaseCRNModel):
 
         self.add_species([G1, G2, P1])
 
-        a11 = gillespy.Parameter(name='a11', expression='100.0')
-        a12 = gillespy.Parameter(name='a12', expression='2.0')
-        a21 = gillespy.Parameter(name='a21', expression='500.0')
-        b1 = gillespy.Parameter(name='b1', expression='2.0')
+        a11 = gillespy.Parameter(name='a11', expression=self.params['a11'])
+        a12 = gillespy.Parameter(name='a12', expression=self.params['a12'])
+        a21 = gillespy.Parameter(name='a21', expression=self.params['a21'])
+        b1 = gillespy.Parameter(name='b1', expression=self.params['b1'])
         gamma12 = gillespy.Parameter(name='gamma12', expression=epsilon * 1.0)
         gamma21 = gillespy.Parameter(name='gamma21', expression=epsilon * 1.0)
 
@@ -100,7 +108,7 @@ class X16(BaseCRNModel):
         return [1, 1, 800]
 
     @classmethod
-    def get_initial_settings(cls, n_settings, sigm=0.7, conservation_constant=4):
+    def get_initial_settings(cls, n_settings, sigm=0.5, conservation_constant=4):
         """
         Generate a set of random initial states.
         Parameters

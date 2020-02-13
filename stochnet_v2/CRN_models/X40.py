@@ -9,6 +9,14 @@ class X40(BaseCRNModel):
     Class for (40) model defined in https://arxiv.org/pdf/1801.09200.pdf.
     For training: timestep=20.0, endtime=200.
     """
+
+    params = {
+        'a11': 0.5,
+        'a21': 0.1667,
+        'b1': 1.0,
+        'b2': 200.0,
+    }
+
     def __init__(
             self,
             endtime,
@@ -37,10 +45,10 @@ class X40(BaseCRNModel):
 
         self.add_species([G1, G2, P1, P2])
 
-        a11 = gillespy.Parameter(name='a11', expression='0.5')
-        a21 = gillespy.Parameter(name='a21', expression='0.1667')
-        b1 = gillespy.Parameter(name='b1', expression='1.0')
-        b2 = gillespy.Parameter(name='b2', expression='200.0')
+        a11 = gillespy.Parameter(name='a11', expression=self.params['a11'])
+        a21 = gillespy.Parameter(name='a21', expression=self.params['a21'])
+        b1 = gillespy.Parameter(name='b1', expression=self.params['b1'])
+        b2 = gillespy.Parameter(name='b2', expression=self.params['b2'])
         gamma12 = gillespy.Parameter(name='gamma12', expression=epsilon * 1.0)
         gamma21 = gillespy.Parameter(name='gamma21', expression=epsilon * 1.0)
 

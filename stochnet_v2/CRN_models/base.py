@@ -150,7 +150,7 @@ class BaseCRNModel(gillespy.Model):
         return histogram_bounds
 
     @classmethod
-    def get_randomized_parameters(cls, param_names, n_settings, sigm=0.5):
+    def get_randomized_parameters(cls, param_names, n_settings, sigm=0.4):
         randomized = {}
         for name in param_names:
             if name not in cls.params:

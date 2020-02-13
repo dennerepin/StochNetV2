@@ -50,7 +50,7 @@ def main():
         model_id=model_id,
         nb_randomized_params=nb_randomized_params,
         nb_past_timesteps=nb_past_timesteps,
-        n_bins=100,
+        n_bins=200,
         distance_kind=distance_kind,
         with_timestamps=True,
         save_histograms=True,
