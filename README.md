@@ -469,6 +469,8 @@ Evaluation script saves:
 * plots of average (over different settings) distance between histograms produced by original and abstract 
 model after different number of time-steps.
 
+Example:
+
 
     from stochnet_v2.utils.evaluation import evaluate
     
@@ -832,6 +834,8 @@ This state can be updated by running one of the following steps:
    Gaussian diffusion kernel. A subset of species can be selected for this step.
 * `max_propagation_step`, which assigns to every grid node the (factored) maximum value 
    of its neighbors. A subset of species can be selected for this step.
+
+Example:
 
 
     from stochnet_v2.static_classes.grid_runner import GridRunner
