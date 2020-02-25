@@ -30,6 +30,10 @@ An instance CRN_model class can
     model.set_parameters(randomized_params)
     trajectories = model.run()
 
+    
+A new CRN model should be inherited from `stochnet_v2.CRN_models.base.BaseCRNModel` 
+and have all abstract methods implemented. For examples, see `Bees`, `Gene`, `X16`, or other models.
+
 Some SBML models can be imported with caution: variability of SBML format makes 
 automated imports practically infeasible, and for every model some pre-processing is required, e.g. 
 editing reaction rates formulas, rewriting reversible reactions as two separate reactions, etc. 
@@ -465,7 +469,7 @@ Evaluation script saves:
  * plots of average (over different settings) distance between histograms produced by original and abstract 
  model after different number of time-steps.
 
-    
+
     from stochnet_v2.utils.evaluation import evaluate
     
     distance_kind = 'dist'
@@ -491,11 +495,205 @@ Evaluation script saves:
         settings_idxs_to_save_histograms=settings_idxs_to_save_histograms,
     )
 
-### 4. Utils and File Organisation.
+
+### 4. Utils
+
+#### 4.1. Helper functions
+
+Various helper functions are implemented in `stochnet_v2.utils`:
+ * `benchmarking`: measure simulation times for original CRN models (Gillespie algorithm) 
+ and MDN-based abstract models.
+ * `evaluation`: generate trajectories for histograms, measure histogram distance, plot histograms
+ * `util`: 
+    * `generate_gillespy_traces` - generate trajectories for original CRN model using multiprocessing tools
+    * `plot_traces`, `plot_random_traces` - plot model trajectories
+    * `visualize_description` - visualize parameters of the components of mixture distribution
+    * `visualize_genotypes` - visualize NAS model 'genotype', i.e. the architecture selected by the architecture search algorithm:
+    selected operation candidates and connections
+
+    
+            # generate traces:
+            
+            initial_settings = model.get_initial_settings(n_settings)
+            
+            gillespy_traces = generate_gillespy_traces(
+                settings=initial_settings,
+                step_to=n_steps,
+                timestep=timestep,
+                gillespy_model=m,
+                traj_per_setting=traj_per_setting,
+            )
+            
+            nn_traces = nn.generate_traces(
+                initial_settings[:, np.newaxis, :],
+                n_steps=n_steps,
+                n_traces=traj_per_setting,
+                curr_state_rescaled=False,
+                scale_back_result=True,
+                round_result=True,
+                add_timestamps=True
+            )
+            
+            # plot traces:
+            
+            setting_idx = 0
+            n_traces = 5
+            
+            plt.figure(figsize=(16, 10))
+            plot_random_traces(gillespy_traces[setting_idx], n_traces, linestyle='--', marker='')
+            plot_random_traces(nn_traces[setting_idx], n_traces, linestyle='-', marker='')
+            
+            # visualize distribution parameters:
+            
+            curr_state = np.expand_dims(initial_settings[setting_idx:setting_idx + 1], -2)
+            descr = nn.get_description(
+                current_state_val=curr_state, 
+                current_state_rescaled=False, 
+                visualize=False
+            )
+            figures = visualize_description(descr, save_figs_to='./visualizations')
+            
+            # visualize NAS model:
+            
+            # genotypes.pickle is automatically saved at the end of architecture search (sect. 3.2.2) 
+            # in the model folder. 
+        
+            with open(os.path.join(nn.model_explorer.model_folder, 'genotypes.pickle'), 'rb') as f:
+                genotypes = pickle.load(f)
+            
+            visualize_genotypes(genotypes, './visualizations/model_genotype.pdf')
+            
+
+### 4.2. File Organisation
+
+We use `FileExplorer` helper classes to maintain uniform file structure. 
+These classes store paths for saving and reading files, such as dataset files, model files, configs, 
+evaluation results, etc. See `stochnet_v2.utils.file_organisation` for details.
+
+    model_name = 'Bees'
+    timestep = 0.5
+    dataset_id = 1
+    model_id = 1
+    nb_features = 4
+    nb_past_timesteps = 1
+    params_to_randomize = ['stinging_rate']
+    
+    project_folder = '~/DATA/' + model_name
+    project_explorer = ProjectFileExplorer(project_folder)
+    dataset_explorer = project_explorer.get_dataset_file_explorer(timestep, dataset_id)
+    model_explorer = project_explorer.get_model_file_explorer(timestep, model_id)
+    histogram_explorer = dataset_explorer.get_histogram_file_explorer(model_id, 0)
+    
+`ProjectFileExplorer` creates root folders for models and data:
+    
+    * Bees/
+        * dataset/
+        * models/
+
+`DatasetFileExplorer` creates separate folders for different datasets:
+
+    * dataset/
+        * data/
+            * 0.5/        # timestep
+                * 1/      # dataset_id
+
+`ModelFileExplorer` creates separate folders for different models:
+
+    * models/
+        * 0.5/            # timestep
+            * 1/          # model_id
+    
+`HistogramFileExplorer` creates folders to store histograms during evaluation:
+
+    * * dataset/
+        * data/
+            * 0.5/
+                * 1/
+                    * histogram/
+                        * model_<model-id>/
+                            * setting_<setting-idx>/
+                                * <time-lag>/
+
 
 ### 5. High-level scripts
 
-### 6. Luigi workflow-manager.
+After properly defining a CRN model, the workflow takes the following actions:
+* generate dataset of trajectories
+* generate histogram-dataset (another dataset for evaluation)
+* format dataset (transform trajectories to training examples)
+* train model (static or NAS)
+* evaluate
+
+module `stochnet_v2.scripts` contains scripts to run these tasks:
+
+    python stochnet_v2/scripts/simulate_data_gillespy.py \
+           --project_folder='home/DATA/Bees' \
+           --timestep=0.5 \
+           --dataset_id=1 \
+           --nb_settings=50 \
+           --nb_trajectories=50 \
+           --endtime=50 \
+           --model_name='Bees' \
+           --params_to_randomize='stinging_rate'
+
+    python stochnet_v2/scripts/simulate_histogram_data_gillespy.py \
+           --project_folder='/home/DATA/Bees' \
+           --timestep=0.5 \
+           --dataset_id=1 \
+           --nb_settings=10 \
+           --nb_trajectories=2000 \
+           --endtime=50 \
+           --model_name='Bees' \
+           --params_to_randomize='stinging_rate'
+    
+    python stochnet_v2/scripts/format_data_for_training.py \
+           --project_folder='/home/DATA/Bees' \
+           --timestep=0.5 \
+           --dataset_id=1 \
+           --nb_past_timesteps=1 \
+           --nb_randomized_params=1 \
+           --positivity=true \
+           --test_fraction=0.2 \
+           --save_format='hdf5'
+
+    python stochnet_v2/scripts/train_static.py \
+        --project_folder='/home/DATA/Bees' \
+        --timestep=0.5 \
+        --dataset_id=1 \
+        --model_id=1 \
+        --nb_features=4 \
+        --nb_past_timesteps=1 \
+        --nb_randomized_params=1 \
+        --body_config_path='/home/DATA/Bees/body_config.json' \
+        --mixture_config_path='/home/DATA/Bees/mixture_config.json' \
+        --n_epochs=100 \
+        --batch_size=256 \
+        --add_noise=True \
+        --stddev=0.01
+        
+    python stochnet_v2/scripts/train_search.py \
+        --project_folder='/home/dn/DATA/Bees' \
+        --timestep=0.5 \
+        --dataset_id=1 \
+        --model_id=2 \
+        --nb_features=4 \
+        --nb_past_timesteps=1 \
+        --nb_randomized_params=1 \
+        --body_config_path='/home/DATA/Bees/body_config_search.json' \
+        --mixture_config_path='/home/DATA/Bees/mixture_config_search.json' \
+        --n_epochs_main=100 \
+        --n_epochs_heat_up=10 \
+        --n_epochs_arch=5 \
+        --n_epochs_interval=5 \
+        --n_epochs_finetune=20 \
+        --batch_size=256 \
+        --add_noise=True \
+        --stddev=0.01
+
+### 6. Luigi workflow-manager
+
+
+### 7. GridRunner
 
 
 Original idea of using Mixture Density Networks was proposed by Luca Bortolussi & Luca Palmieri 
