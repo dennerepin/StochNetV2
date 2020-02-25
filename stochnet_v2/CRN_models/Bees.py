@@ -103,7 +103,7 @@ class Bees(BaseCRNModel):
             reactants={Bee: 1, P: 1},
             products={BeeA: 1, P: 1},
             propensity_function='become_aggressive_rate * Bee * (L / (1 + pow(exp,-s*P)) - L/2)',
-            rate=become_aggressive_rate,
+            # rate=become_aggressive_rate,
         )
 
         # calm_down = gillespy.Reaction(
@@ -113,8 +113,8 @@ class Bees(BaseCRNModel):
         #     rate=calm_down_rate,
         # )
 
-        f_degradation = gillespy.Reaction(
-            name='f_degradation',
+        p_degradation = gillespy.Reaction(
+            name='p_degradation',
             reactants={P: 1},
             products={},
             rate=p_degradation_rate,
@@ -124,7 +124,7 @@ class Bees(BaseCRNModel):
             stinging,
             p_stinging,
             become_aggressive,
-            f_degradation,
+            p_degradation,
             # calm_down,
         ])
 

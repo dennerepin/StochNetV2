@@ -17,13 +17,13 @@ An instance CRN_model class can
 
 
     Example:
-    from stochnet_v2.CRN_models.Bees import Bees
+    from stochnet_v2.CRN_models.SIR import SIR
     
-    endtime=50
+    endtime=20
     timestep=0.5
-    params_to_randomize = ['stinging_rate']
+    params_to_randomize = ['beta', 'gamma']
     
-    model = Bees(endtime, timestep)
+    model = SIR(endtime, timestep)
     initial_settings = model.get_initial_settings(n_settings=1)
     randomized_params = model.get_randomized_parameters(params_to_randomize, n_settings=1)
     model.set_species_initial_value(initial_settings)
@@ -32,7 +32,7 @@ An instance CRN_model class can
 
     
 A new CRN model should be inherited from `stochnet_v2.CRN_models.base.BaseCRNModel` 
-and have all abstract methods implemented. For examples, see `Bees`, `Gene`, `X16`, or other models.
+and have all abstract methods implemented. For examples, see `SIR`, `Bees`, `Gene`, `X16`, or other models.
 
 Some SBML models can be imported with caution: variability of SBML format makes 
 automated imports practically infeasible, and for every model some pre-processing is required, e.g. 
@@ -50,16 +50,16 @@ or HDF5 format.\
 Classes `HDF5Dataset` and `TFRecordsDataset` can read and iterate through saved datasets, yielding 
 data batches. Support shuffling and applying pre-processing functions on the fly.
 
-    endtime = 50
+    endtime = 20
     timestep = 0.5
-    params_to_randomize = ['stinging_rate']
+    params_to_randomize = ['beta', 'gamma']
     dataset_folder = '<dataset-folder-path>'
     dataset_fp = dataset_folder + 'dataset.npy'
     
     dataset = build_simulation_dataset(
-        model_name='Bees',
+        model_name='SIR',
         nb_settings=100,
-        nb_trajectories=100,
+        nb_trajectories=25,
         timestep=timestep,
         endtime=endtime,
         dataset_folder=dataset_folder,
@@ -104,7 +104,7 @@ as input and output correspondingly.
         print(x.shape, y.shape)
     
     >out:    
-    ((64, 1, 5), (64, 5))
+    ((64, 1, 5), (64, 5))  # last dimension is 5 = nb_features + nb_randomized_params
     ((64, 1, 5), (64, 5))
     ...
 
@@ -120,7 +120,7 @@ simulations dataset and then used to produce trajectories.
     
     from stochnet_v2.static_classes.model import StochNet
     
-    nb_features = 4  # number of CRN model species
+    nb_features = 3  # number of CRN model species
     project_folder = <'project-folder-path'>  # here all files will be stored
     dataset_id = 1  # dataset ID, number
     model_id = 1  # model ID, number
@@ -174,7 +174,7 @@ network body part and then used to sample the next state of the model.
 	[
 		"categorical",
 		{
-			"hidden_size": 30,
+			"hidden_size": "none",      # with a number here, additional layer of this size will be added
 			"activation": "none",
 			"coeff_regularizer": "none",
 			"kernel_constraint": "none",
@@ -186,7 +186,7 @@ network body part and then used to sample the next state of the model.
 	[
 		"normal_diag",
 		{
-			"hidden_size": 30,
+			"hidden_size": "none",      # with a number here, additional layer of this size will be added
 			"activation": "none",
 			"mu_regularizer": "none",
 			"diag_regularizer": "l2",
@@ -199,7 +199,7 @@ network body part and then used to sample the next state of the model.
 	[
 		"normal_tril",
 		{
-			"hidden_size": 30,
+			"hidden_size": "none",      # with a number here, additional layer of this size will be added
 			"activation": "none",
 			"mu_regularizer": "none",
 			"diag_regularizer": "l2",
@@ -294,7 +294,7 @@ Model config is different in this case:
 
     {
         "n_cells": 2,
-        "cell_size": 4,
+        "cell_size": 2,
         "expansion_multiplier": 30,
         "n_states_reduce": 2,
         "kernel_constraint": "none",
@@ -393,11 +393,11 @@ For simulations, trained model can be loaded in 'inference' mode:
 
 Get random inputs (initial state and randomized parameters) from CRN model:
     
-    from stochnet_v2.CRN_models.Bees import Bees
+    from stochnet_v2.CRN_models.SIR import SIR
     from stochnet_v2.CRN_models.utils.util import merge_species_and_param_settings
     
     n_settings = 100
-    model = Bees(endtime, timestep)
+    model = SIR(endtime, timestep)
     initial_settings = model.get_initial_settings(n_settings)
     randomized_params = model.get_randomized_parameters(params_to_randomize, n_settings)
     inputs = merge_species_and_param_settings(initial_settings, randomized_params)
@@ -473,8 +473,8 @@ Evaluation script saves:
     from stochnet_v2.utils.evaluation import evaluate
     
     distance_kind = 'dist'
-    target_species_names = ['BeeD', 'P']
-    time_lag_range = [1, 5, 10, 25, 50]
+    target_species_names = ['S', 'I']
+    time_lag_range = [1, 5, 10, 20]
     settings_idxs_to_save_histograms = [i for i in range(10)]
     
     evaluate(
@@ -570,13 +570,13 @@ We use `FileExplorer` helper classes to maintain uniform file structure.
 These classes store paths for saving and reading files, such as dataset files, model files, configs, 
 evaluation results, etc. See `stochnet_v2.utils.file_organisation` for details.
 
-    model_name = 'Bees'
+    model_name = 'SIR'
     timestep = 0.5
     dataset_id = 1
     model_id = 1
     nb_features = 4
     nb_past_timesteps = 1
-    params_to_randomize = ['stinging_rate']
+    params_to_randomize = ['beta', 'gamma']
     
     project_folder = '~/DATA/' + model_name
     project_explorer = ProjectFileExplorer(project_folder)
@@ -586,7 +586,7 @@ evaluation results, etc. See `stochnet_v2.utils.file_organisation` for details.
     
 `ProjectFileExplorer` creates root folders for models and data:
     
-    * Bees/
+    * SIR/
         * dataset/
         * models/
 
@@ -624,63 +624,63 @@ After properly defining a CRN model, the workflow takes the following actions:
 * train model (static or NAS)
 * evaluate
 
-module `stochnet_v2.scripts` contains scripts to run these tasks:
+Module `stochnet_v2.scripts` contains scripts to run these tasks:
 
     python stochnet_v2/scripts/simulate_data_gillespy.py \
-           --project_folder='home/DATA/Bees' \
+           --project_folder='home/DATA/SIR' \
            --timestep=0.5 \
            --dataset_id=1 \
-           --nb_settings=50 \
+           --nb_settings=100 \
            --nb_trajectories=50 \
-           --endtime=50 \
-           --model_name='Bees' \
-           --params_to_randomize='stinging_rate'
+           --endtime=20 \
+           --model_name='SIR' \
+           --params_to_randomize='beta gamma'
 
     python stochnet_v2/scripts/simulate_histogram_data_gillespy.py \
-           --project_folder='/home/DATA/Bees' \
+           --project_folder='/home/DATA/SIR' \
            --timestep=0.5 \
            --dataset_id=1 \
            --nb_settings=10 \
            --nb_trajectories=2000 \
-           --endtime=50 \
-           --model_name='Bees' \
-           --params_to_randomize='stinging_rate'
-    
+           --endtime=20 \
+           --model_name='SIR' \
+           --params_to_randomize='beta gamma'
+
     python stochnet_v2/scripts/format_data_for_training.py \
-           --project_folder='/home/DATA/Bees' \
+           --project_folder='/home/DATA/SIR' \
            --timestep=0.5 \
            --dataset_id=1 \
            --nb_past_timesteps=1 \
-           --nb_randomized_params=1 \
+           --nb_randomized_params=2 \
            --positivity=true \
            --test_fraction=0.2 \
            --save_format='hdf5'
 
     python stochnet_v2/scripts/train_static.py \
-        --project_folder='/home/DATA/Bees' \
+        --project_folder='/home/DATA/SIR' \
         --timestep=0.5 \
         --dataset_id=1 \
         --model_id=1 \
-        --nb_features=4 \
+        --nb_features=3 \
         --nb_past_timesteps=1 \
-        --nb_randomized_params=1 \
-        --body_config_path='/home/DATA/Bees/body_config.json' \
-        --mixture_config_path='/home/DATA/Bees/mixture_config.json' \
+        --nb_randomized_params=2 \
+        --body_config_path='/home/DATA/SIR/body_config.json' \
+        --mixture_config_path='/home/DATA/SIR/mixture_config.json' \
         --n_epochs=100 \
         --batch_size=256 \
         --add_noise=True \
         --stddev=0.01
-        
+
     python stochnet_v2/scripts/train_search.py \
-        --project_folder='/home/dn/DATA/Bees' \
+        --project_folder='/home/DATA/SIR' \
         --timestep=0.5 \
         --dataset_id=1 \
         --model_id=2 \
-        --nb_features=4 \
+        --nb_features=3 \
         --nb_past_timesteps=1 \
-        --nb_randomized_params=1 \
-        --body_config_path='/home/DATA/Bees/body_config_search.json' \
-        --mixture_config_path='/home/DATA/Bees/mixture_config_search.json' \
+        --nb_randomized_params=2 \
+        --body_config_path='/home/DATA/SIR/body_config_search.json' \
+        --mixture_config_path='/home/DATA/SIR/mixture_config_search.json' \
         --n_epochs_main=100 \
         --n_epochs_heat_up=10 \
         --n_epochs_arch=5 \
@@ -690,12 +690,197 @@ module `stochnet_v2.scripts` contains scripts to run these tasks:
         --add_noise=True \
         --stddev=0.01
 
-### 6. Luigi workflow-manager
+    python stochnet_v2/scripts/evaluate.py \
+        --project_folder='/home/DATA/SIR' \
+        --timestep=0.5 \
+        --dataset_id=1 \
+        --model_id=2 \
+        --model_name='SIR' \
+        --nb_past_timesteps=1 \
+        --nb_randomized_params=2 \
+        --distance_kind='dist' \
+        --target_species_names='S I' \
+        --time_lag_range='1 3 5 10 20' \
+        --settings_idxs_to_save_histograms='0 1 2 3 4 5 6 7 8 9'
+
+Config files for MDN body and mixture parts should be filled as shown in Sect. 3.
+
+
+### 6. Luigi workflow manager
+
+The above workflow is wrapped with `luigi` library designed for running complex pipelines 
+of inter-dependent tasks. \
+Alternatively to manual running above commands, one can fill a luigi configuration file, 
+and it will run the whole sequence of tasks taking care of the right order and pre-requisites 
+for every task. \
+Example of luigi config file `SIR.cfg`:
+
+    [GlobalParams]
+    
+    model_name=SIR
+    project_folder=/home/DATA/SIR
+    timestep=0.5
+    endtime=20
+    dataset_id=1
+    nb_past_timesteps=1
+    params_to_randomize=beta gamma
+    nb_randomized_params=2
+    random_seed=42
+    
+    nb_settings=100
+    nb_trajectories=50
+    
+    positivity=true
+    test_fraction=0.2
+    save_format=hdf5
+    
+    nb_histogram_settings=25
+    nb_histogram_trajectories=2000
+    histogram_endtime=20
+    
+    model_id=2
+    nb_features=3
+    body_config_path=/home/DATA/SIR/body_config_search.json
+    mixture_config_path=/home/DATA/SIR/mixture_config_search.json
+    n_epochs=100
+    n_epochs_main=100
+    n_epochs_heat_up=10
+    n_epochs_arch=5
+    n_epochs_interval=5
+    n_epochs_finetune=20
+    batch_size=256
+    add_noise=true
+    stddev=0.01
+    
+    distance_kind=dist
+    target_species_names=S I
+    time_lag_range=1 3 5 10 20
+    settings_idxs_to_save_histograms=0 1 2 3 4 5 6 7 8 9
+
+Then to run all tasks from data generation to evaluation run
+
+    LUIGI_CONFIG_PATH=/home/DATA/SIR/SIR.cfg python -m luigi --module stochnet_v2.utils.luigi_workflow Evaluate --log-level=INFO --local-scheduler
+
+One can also run these tasks one by one by replacing `Evaluate` task name with 
+`GenerateDataset`, `FormatDataset`, `GenerateHistogramData`, `TrainStatic` or `TrainSearch`.
+
+> *Note*: At the moment, to switch dependencies of `Evaluate` task between 
+TrainStatic and TrainSearch, one should leave uncommented corresponding line in 
+`stochnet_v2.utils.luigi_workflow`, in definition of `Evaluate` class:
+
+    def requires(self):
+        return [
+            GenerateHistogramData(),
+            TrainSearch()
+            # TrainStatic()
+        ]
 
 
 ### 7. GridRunner
 
+`GridRunner` implements simulation of multiple CRN instances on a (spatial) grid 
+with communication via spreading a subset of species across neighboring grid nodes. \
+`GridRunner` is initialized with a model and `GridSpec`.
+`GridSpec` specifies a grid:
 
+    from stochnet_v2.static_classes.grid_runner import GridSpec
+    
+    grid_spec = GridSpec(
+        boundaries=[[0.0, 1.0], [0.0, 1.0]],
+        grid_size=[10, 10]
+    )
+
+A model can be either an instance of trained `StochNet`, or an instance of special proxy-class for 
+`CRN_model`:
+
+
+    from stochnet_v2.CRN_models.Bees import Bees
+    from stochnet_v2.static_classes.grid_runner import Model
+    
+    timestep = 0.5
+    endtime = 100.0
+    params_to_randomize = []
+    
+    m = Bees(endtime, timestep)
+    model = Model(m, params_to_randomize=[])
+
+or
+    
+    from stochnet_v2.static_classes.model import StochNet
+    
+    model_id = 1
+    dataset_id = 1
+    nb_features = 4
+    nb_past_timesteps = 1
+    
+    model = StochNet(
+        nb_past_timesteps=nb_past_timesteps,
+        nb_features=nb_features,
+        project_folder=project_folder,
+        timestep=timestep,
+        dataset_id=dataset_id,
+        model_id=model_id,
+        nb_randomized_params=len(params_to_randomize),
+        mode='inference'
+    )
+
+`GridRunner.state` stores state values for every model instance. 
+This state can be updated by running one of the following steps:
+ * `model_step`, which for every grid node runs one forward step of the model, 
+   starting corresponding state values stored in `GridRunner.state`.
+ * `diffusion_step`, which simulates diffusion of species across the grid with a 
+   Gaussian diffusion kernel. A subset of species can be selected for this step.
+ * `max_propagation_step`, which assigns to every grid node the (factored) maximum value 
+   of its neighbors. A subset of species can be selected for this step.
+
+
+    from stochnet_v2.static_classes.grid_runner import GridRunner
+    
+    gr = GridRunner(
+        model,
+        grid_spec,
+        save_dir='/home/DATA/GridRunner/Bees',
+        diffusion_kernel_size=3,
+        diffusion_sigma=0.7
+    )
+    
+    gr.model_step()
+    
+    gr.diffusion_step(
+        species_idx=3,
+        conservation=False,
+    )
+    
+    gr.max_propagation_step(
+        species_idx=3,
+        alpha=0.5,
+    )
+
+`Bees` model describes the defense behavior of honeybees: after stinging,
+ a bee dies and releases pheromone (species_idx=3). In presence of pheromone
+ other bees become aggressive and can sting too. \
+ To model this behavior, we first spread groups of bees across a grid, and set initial 
+ concentrations of pheromone in several places (or alternatively making some of them 
+ initially aggressive).
+ Then by altering model steps and pheromone propagation steps we obtain a discretized approximation
+ of the colony behavior.
+ 
+     states_sequence = gr.run_model(
+        tot_iterations=100,      # total number of iterations
+        propagation_steps=1,     # every iteration has 1 propagation step
+        model_steps=5,           # every iteration has 5 model step
+        propagation_mode='mp',   # 'mp' for max_propagation_step, 'd' for diffusion_step
+        species_idx=3,           # keyword-arguments for propagation steps
+        alpha=0.33               # keyword-arguments for propagation steps
+    )
+
+`states_sequence` can then be animated:
+
+![alt text](https://github.com/dennerepin/gif/blob/master/animated_progress.gif?raw=true)
+
+
+\
+\
 Original idea of using Mixture Density Networks was proposed by Luca Bortolussi & Luca Palmieri 
 (https://link.springer.com/chapter/10.1007/978-3-319-99429-1_2).
 Some code was taken from: https://github.com/LukeMathWalker/StochNet.
