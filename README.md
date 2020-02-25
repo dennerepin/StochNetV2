@@ -10,10 +10,10 @@ The module contains base- and example- classes defining CRN models.
 This models can be simulated with Gillepie algorithm provided by `gillespy` package. \
 CRN models are used as a source of synthetic data to train and evaluate abstract models.
 An instance CRN_model class can
- * generate randomized initial concentrations (populations)
- * generate randomized reaction rates
- * set initial concentrations and reaction rates
- * produce trajectories
+* generate randomized initial concentrations (populations)
+* generate randomized reaction rates
+* set initial concentrations and reaction rates
+* produce trajectories
 
 
     Example:
@@ -463,11 +463,11 @@ a set of random initial settings:
 Then evaluation script runs StochNet the simulations starting from the same initial settings 
 as the trajectories in `histogram_dataset`. \
 Evaluation script saves:
- * overall average value of histogram distance
- * histogram dataset self-distance (as a lower bound for the distance between models)
- * plots of species histograms after different number of steps
- * plots of average (over different settings) distance between histograms produced by original and abstract 
- model after different number of time-steps.
+* overall average value of histogram distance
+* histogram dataset self-distance (as a lower bound for the distance between models)
+* plots of species histograms after different number of steps
+* plots of average (over different settings) distance between histograms produced by original and abstract 
+model after different number of time-steps.
 
 
     from stochnet_v2.utils.evaluation import evaluate
@@ -826,11 +826,11 @@ or
 
 `GridRunner.state` stores state values for every model instance. 
 This state can be updated by running one of the following steps:
- * `model_step`, which for every grid node runs one forward step of the model, 
+* `model_step`, which for every grid node runs one forward step of the model, 
    starting corresponding state values stored in `GridRunner.state`.
- * `diffusion_step`, which simulates diffusion of species across the grid with a 
+* `diffusion_step`, which simulates diffusion of species across the grid with a 
    Gaussian diffusion kernel. A subset of species can be selected for this step.
- * `max_propagation_step`, which assigns to every grid node the (factored) maximum value 
+* `max_propagation_step`, which assigns to every grid node the (factored) maximum value 
    of its neighbors. A subset of species can be selected for this step.
 
 
@@ -856,14 +856,15 @@ This state can be updated by running one of the following steps:
         alpha=0.5,
     )
 
-`Bees` model describes the defense behavior of honeybees: after stinging,
- a bee dies and releases pheromone (species_idx=3). In presence of pheromone
- other bees become aggressive and can sting too. \
- To model this behavior, we first spread groups of bees across a grid, and set initial 
- concentrations of pheromone in several places (or alternatively making some of them 
- initially aggressive).
- Then by altering model steps and pheromone propagation steps we obtain a discretized approximation
- of the colony behavior.
+
+`Bees` model describes the defense behavior of honeybees: after stinging, 
+a bee dies and releases pheromone (species_idx=3). In presence of pheromone 
+other bees become aggressive and can sting too. \
+To model this behavior, we first spread groups of bees across a grid, and set initial 
+concentrations of pheromone in several places (or alternatively making some of them 
+initially aggressive). 
+Then by altering model steps and pheromone propagation steps we obtain a discretized approximation 
+of the colony behavior.
  
      states_sequence = gr.run_model(
         tot_iterations=100,      # total number of iterations
