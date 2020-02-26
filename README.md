@@ -915,7 +915,7 @@ of the colony behavior.
 
 `states_sequence` can then be animated:
 
-![alt text](https://github.com/dennerepin/gif/blob/master/animated_progress.gif?raw=true)
+![alt text](https://github.com/dennerepin/gif/blob/master/animated_progress_noaxes.gif?raw=true)
 
 
 \
