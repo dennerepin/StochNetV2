@@ -37,6 +37,7 @@ def main():
     parser.add_argument('--nb_trajectories', type=int, required=True)
     parser.add_argument('--endtime', type=float, required=True)
     parser.add_argument('--model_name', type=str, required=True)
+    parser.add_argument('--params_to_randomize', required=True, default='')
     parser.add_argument('--random_seed', type=int, default=23)
     args = parser.parse_args()
 
@@ -47,6 +48,8 @@ def main():
     nb_trajectories = args.nb_trajectories
     endtime = args.endtime
     model_name = args.model_name
+    params_to_randomize = args.params_to_randomize.split(' ')
+    params_to_randomize = params_to_randomize if params_to_randomize != [''] else []
     random_seed = args.random_seed
 
     start = time()
@@ -78,6 +81,7 @@ def main():
         timestep,
         endtime,
         dataset_explorer.dataset_folder,
+        params_to_randomize=params_to_randomize,
         prefix='histogram_partial_',
         how='stack',
         settings_filename=os.path.basename(dataset_explorer.histogram_settings_fp),
@@ -89,7 +93,7 @@ def main():
 
     with open(dataset_explorer.log_fp, 'a') as file:
         file.write(
-            f"Simulating {nb_trajectories} {model_name} histogram trajectories "
+            f"\n\nSimulating {nb_trajectories} {model_name} histogram trajectories "
             f"for {nb_settings} different settings until {endtime} "
             f"took {execution_time} seconds.\n"
         )
@@ -101,12 +105,13 @@ if __name__ == '__main__':
 
 """
 python stochnet_v2/scripts/simulate_histogram_data_gillespy.py \
-       --project_folder='/home/dn/DATA/EGFR' \
-       --timestep=0.2 \
-       --dataset_id=1 \
-       --nb_settings=2 \
-       --nb_trajectories=10 \
-       --endtime=10 \
-       --model_name='EGFR' \
-       --random_seed=44
+       --project_folder '/home/dn/DATA/SIR' \
+       --timestep 0.5 \
+       --dataset_id 3 \
+       --nb_settings 2 \
+       --nb_trajectories 25 \
+       --endtime 10 \
+       --model_name 'SIR' \
+       --params_to_randomize 'beta gamma' \
+       --random_seed 43
 """

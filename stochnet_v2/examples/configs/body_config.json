@@ -1,0 +1,13 @@
+{
+	"body_fn_name": "body_b",
+	"block_name": "a",
+	"hidden_size": 50,
+	"n_blocks": 2,
+	"use_batch_norm": false,
+	"activation": "relu",
+	"activity_regularizer": "none",
+	"kernel_constraint": "none",
+	"kernel_regularizer": "l2",
+	"bias_constraint": "none",
+	"bias_regularizer": "l2"
+}

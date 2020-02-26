@@ -7,6 +7,7 @@ import os
 import shutil
 import tensorflow as tf
 from functools import partial
+from time import time
 
 
 def str_to_bool(arg):
@@ -87,17 +88,47 @@ def get_cmap(n, name='hsv'):
 def _single_trace(
         setting,
         gillespy_model,
+        params_to_randomize,
         traj_per_setting,
 ):
-    gillespy_model.set_species_initial_value(setting)
+    # start = time()
+    nb_randomized_params = len(params_to_randomize)
+    if nb_randomized_params > 0:
+        params = setting[-nb_randomized_params:]
+        setting = setting[:-nb_randomized_params]
+        param_dict = dict(zip(params_to_randomize, params))
+
+        gillespy_model.set_species_initial_value(setting)
+        gillespy_model.set_parameters(param_dict)
+
+    else:
+        gillespy_model.set_species_initial_value(setting)
+
     traces = gillespy_model.run(number_of_trajectories=traj_per_setting, show_labels=False)
     traces = np.array(traces)
+    # elapsed = time() - start
+    # print(f'..single trace: shape={traces.shape}, elapsed {elapsed:.2f}')
     return traces
 
 
-def generate_gillespy_traces(settings, step_to, timestep, gillespy_model, traj_per_setting=10):
-    endtime = int(step_to * timestep)
-    nb_of_steps = int(math.ceil((endtime / timestep))) + 1
+def generate_gillespy_traces(
+        settings,
+        n_steps,
+        timestep,
+        gillespy_model,
+        params_to_randomize,
+        traj_per_setting=10,
+):
+    # start = time()
+
+    # V1
+    # endtime = int(step_to * timestep)
+    # nb_of_steps = int(math.ceil((endtime / timestep))) + 1
+
+    # V2
+    endtime = n_steps * timestep
+    nb_of_steps = int(endtime // timestep) + 1
+
     gillespy_model.timespan(np.linspace(0, endtime, nb_of_steps))
 
     count = multiprocessing.cpu_count() * 3 // 4
@@ -108,11 +139,17 @@ def generate_gillespy_traces(settings, step_to, timestep, gillespy_model, traj_p
     task = partial(
         _single_trace,
         gillespy_model=gillespy_model,
+        params_to_randomize=params_to_randomize,
         traj_per_setting=traj_per_setting,
     )
 
     simulated_traces = pool.map(task, settings)
-    return np.stack(simulated_traces)
+    simulated_traces = np.stack(simulated_traces)
+
+    # elapsed = time() - start
+    # print(f'..single trace: shape={simulated_traces.shape}, elapsed {elapsed:.2f}')
+
+    return simulated_traces
 
 
 def apply_regularization(regularizer_fn, tensor):
@@ -294,3 +331,15 @@ def visualize_genotypes(genotypes, filename, view=False):
 
     gg.render(filename, view=view)
     return gg
+
+
+def merge_species_and_param_settings(species_settings, randomized):
+    n_settings = len(species_settings)
+    res = []
+    for i in range(n_settings):
+        d = {}
+        for key in randomized:
+            d[key] = randomized[key][i]
+        res.append(d)
+
+    return np.concatenate([species_settings, [list(p.values()) for p in res]], -1)

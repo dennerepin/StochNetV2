@@ -10,6 +10,15 @@ class Bees(BaseCRNModel):
     except the rate for reaction `become_aggressive`: the impact of pheromone (P)
     is expressed as sigmoid function with saturation level at L/2.
     """
+
+    params = {
+        'stinging_rate': 0.1,            # 0.01 0.01
+        'p_stinging_rate': 0.4,          # 0.03 0.04
+        'become_aggressive_rate': 0.125,   # 0.01 0.015
+        'p_degradation_rate': 0.15,      # 0.15 0.15
+        # 'calm_down_rate': 0.2,
+    }
+
     def __init__(
             self,
             endtime,
@@ -49,19 +58,27 @@ class Bees(BaseCRNModel):
             P,
         ])
 
-        stinging_rate = gillespy.Parameter(name='stinging_rate', expression=0.01)  # 0.01,  0.03
-        p_stinging_rate = gillespy.Parameter(name='p_stinging_rate', expression=0.04)  # 0.03
-        become_aggressive_rate = gillespy.Parameter(name='become_aggressive_rate', expression=0.015)  # 0.01
-        p_degradation_rate = gillespy.Parameter(name='p_degradation_rate', expression=0.15)  # 0.15
+        stinging_rate = gillespy.Parameter(
+            name='stinging_rate', expression=self.params['stinging_rate'])
+        p_stinging_rate = gillespy.Parameter(
+            name='p_stinging_rate', expression=self.params['p_stinging_rate'])
+        become_aggressive_rate = gillespy.Parameter(
+            name='become_aggressive_rate', expression=self.params['become_aggressive_rate'])
+        p_degradation_rate = gillespy.Parameter(
+            name='p_degradation_rate', expression=self.params['p_degradation_rate'])
+        # calm_down_rate = gillespy.Parameter(
+        #     name='calm_down_rate', expression=self.params['calm_down_rate'])
+
         exp = gillespy.Parameter(name='exp', expression=2.71828)
-        L = gillespy.Parameter(name='L', expression=5.0)  # L/2 is the max
-        s = gillespy.Parameter(name='s', expression=1.0)  # steepness
+        L = gillespy.Parameter(name='L', expression=1.0)  # 5.0 L/2 is the max
+        s = gillespy.Parameter(name='s', expression=0.2)  # 1.0 steepness
 
         self.add_parameter([
             stinging_rate,
             p_stinging_rate,
             become_aggressive_rate,
             p_degradation_rate,
+            # calm_down_rate,
             exp,
             L,
             s,
@@ -70,14 +87,14 @@ class Bees(BaseCRNModel):
         stinging = gillespy.Reaction(
             name='stinging',
             reactants={BeeA: 1},
-            products={BeeD: 1, P: 1},
+            products={BeeD: 1, P: 2},
             rate=stinging_rate,
         )
 
         p_stinging = gillespy.Reaction(
             name='p_stinging',
             reactants={BeeA: 1, P: 1},
-            products={BeeD: 1, P: 2},
+            products={BeeD: 1, P: 3},
             rate=p_stinging_rate,
         )
 
@@ -86,11 +103,17 @@ class Bees(BaseCRNModel):
             reactants={Bee: 1, P: 1},
             products={BeeA: 1, P: 1},
             propensity_function='become_aggressive_rate * Bee * (L / (1 + pow(exp,-s*P)) - L/2)',
-            # rate=become_aggressive_rate,
         )
 
-        f_degradation = gillespy.Reaction(
-            name='f_degradation',
+        # calm_down = gillespy.Reaction(
+        #     name='calm_down',
+        #     reactants={BeeA: 1},
+        #     products={Bee: 1},
+        #     rate=calm_down_rate,
+        # )
+
+        p_degradation = gillespy.Reaction(
+            name='p_degradation',
             reactants={P: 1},
             products={},
             rate=p_degradation_rate,
@@ -100,7 +123,8 @@ class Bees(BaseCRNModel):
             stinging,
             p_stinging,
             become_aggressive,
-            f_degradation,
+            p_degradation,
+            # calm_down,
         ])
 
     @staticmethod
@@ -148,7 +172,7 @@ class Bees(BaseCRNModel):
                 low = 0
                 high = 1
             else:
-                low = int(val * 0.1)
+                low = int(val * sigm)
                 high = val + int(val * sigm)
             settings[:, i] = np.random.randint(low, high, n_settings)
         return settings

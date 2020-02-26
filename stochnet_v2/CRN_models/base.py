@@ -8,6 +8,8 @@ from abc import abstractmethod
 
 class BaseCRNModel(gillespy.Model):
 
+    params = {}
+
     def __init__(
             self,
             endtime,
@@ -146,6 +148,24 @@ class BaseCRNModel(gillespy.Model):
             val = initial_state[idx]
             histogram_bounds.append([0.5, val * 2] if val != 0 else [0.5, cls._hist_top_bound])
         return histogram_bounds
+
+    @classmethod
+    def get_randomized_parameters(cls, param_names, n_settings, sigm=0.4):
+        randomized = {}
+        for name in param_names:
+            if name not in cls.params:
+                raise KeyError(f"Could not find param {name} in {cls.__name__} class `params` dict.")
+            val = float(cls.params[name])
+
+            randomized[name] = np.random.uniform(val * (1. - sigm), val * (1. + sigm), n_settings)
+        return randomized
+
+    def set_parameters(self, params_dict):
+        for name, val in params_dict.items():
+            if name not in self.listOfParameters:
+                raise KeyError(
+                    f"Could not find {name} parameter in {self.__class__.__name__} model listOfParameters.")
+            self.set_parameter(name, str(val))
 
 
 class BaseSBMLModel(BaseCRNModel):

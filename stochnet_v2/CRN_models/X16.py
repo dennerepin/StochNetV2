@@ -9,6 +9,16 @@ class X16(BaseCRNModel):
     Class for (16) model defined in https://arxiv.org/pdf/1801.09200.pdf.
     For training: timestep=20.0, endtime=200.
     """
+
+    params = {
+        'a11': 100.0,
+        'a12': 2.0,
+        'a21': 500.0,
+        'b1': 2.0,
+        'gamma12': 1.0,
+        'gamma21': 1.0,
+    }
+
     def __init__(
             self,
             endtime,
@@ -28,22 +38,23 @@ class X16(BaseCRNModel):
             model_name="X16",
         )
 
-        epsilon = 0.01
-
         G1 = gillespy.Species(name='G1', initial_value=1)
         G2 = gillespy.Species(name='G2', initial_value=1)
         P1 = gillespy.Species(name='P1', initial_value=100)
 
         self.add_species([G1, G2, P1])
 
-        a11 = gillespy.Parameter(name='a11', expression='100.0')
-        a12 = gillespy.Parameter(name='a12', expression='2.0')
-        a21 = gillespy.Parameter(name='a21', expression='500.0')
-        b1 = gillespy.Parameter(name='b1', expression='2.0')
-        gamma12 = gillespy.Parameter(name='gamma12', expression=epsilon * 1.0)
-        gamma21 = gillespy.Parameter(name='gamma21', expression=epsilon * 1.0)
+        a11 = gillespy.Parameter(name='a11', expression=self.params['a11'])
+        a12 = gillespy.Parameter(name='a12', expression=self.params['a12'])
+        a21 = gillespy.Parameter(name='a21', expression=self.params['a21'])
+        b1 = gillespy.Parameter(name='b1', expression=self.params['b1'])
 
-        self.add_parameter([a11, a12, a21, b1, gamma12, gamma21])
+        epsilon = gillespy.Parameter(name='epsilon', expression=0.01)
+
+        gamma12 = gillespy.Parameter(name='gamma12', expression=f'epsilon * {self.params["gamma12"]}')
+        gamma21 = gillespy.Parameter(name='gamma21', expression=f'epsilon * {self.params["gamma21"]}')
+
+        self.add_parameter([a11, a12, a21, b1, epsilon, gamma12, gamma21])
 
         r1 = gillespy.Reaction(
             name='r1',
@@ -100,7 +111,7 @@ class X16(BaseCRNModel):
         return [1, 1, 800]
 
     @classmethod
-    def get_initial_settings(cls, n_settings, sigm=0.7, conservation_constant=4):
+    def get_initial_settings(cls, n_settings, sigm=0.5, conservation_constant=4):
         """
         Generate a set of random initial states.
         Parameters

@@ -9,7 +9,7 @@ def benchmark(m, nn, timestep, n_settings, traj_per_setting, n_steps):
     start = time()
     gillespy_traces = generate_gillespy_traces(
         settings=initial_settings,
-        step_to=n_steps,
+        n_steps=n_steps,
         timestep=timestep,
         gillespy_model=m,
         traj_per_setting=traj_per_setting,
@@ -36,7 +36,7 @@ def benchmark_ssa(m, timestep, n_settings, traj_per_setting, n_steps):
     start = time()
     gillespy_traces = generate_gillespy_traces(
         settings=initial_settings,
-        step_to=n_steps,
+        n_steps=n_steps,
         timestep=timestep,
         gillespy_model=m,
         traj_per_setting=traj_per_setting,

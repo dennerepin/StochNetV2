@@ -8,6 +8,13 @@ class LotkaVolterra(BaseCRNModel):
     """
     Class for Lotka-Volterra model.
     """
+
+    params = {
+        'k1': 15.0,
+        'k2': 0.15,
+        'k3': 5.0,
+    }
+
     def __init__(
             self,
             endtime,
@@ -29,14 +36,12 @@ class LotkaVolterra(BaseCRNModel):
 
         X = gillespy.Species(name='X', initial_value=100)
         Y = gillespy.Species(name='Y', initial_value=100)
-        # A = gillespy.Species(name='A', initial_value=100)
-        # D = gillespy.Species(name='D', initial_value=0)
 
         self.add_species([X, Y])
 
-        k1 = gillespy.Parameter(name='k1', expression='15.0')
-        k2 = gillespy.Parameter(name='k2', expression='0.15')
-        k3 = gillespy.Parameter(name='k3', expression='5.0')
+        k1 = gillespy.Parameter(name='k1', expression=self.params['k1'])
+        k2 = gillespy.Parameter(name='k2', expression=self.params['k2'])
+        k3 = gillespy.Parameter(name='k3', expression=self.params['k3'])
 
         self.add_parameter([k1, k2, k3])
 

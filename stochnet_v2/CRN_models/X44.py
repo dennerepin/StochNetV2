@@ -9,6 +9,24 @@ class X44(BaseCRNModel):
     Class for (44) model defined in https://arxiv.org/pdf/1801.09200.pdf.
     For training: timestep=50.0, endtime=500.
     """
+
+    params = {
+        'a11': 100.0,
+        'a21': 50.0,
+        'a31': 1.0,
+        'a32': 1.0,
+        'b1': 1.0,
+        'b2': 1.0,
+        'b3': 1.0,
+        'b4': 50.0,  # 50.0 or 200.0
+        'b5': 1.0,
+        'b6': 100.0,
+        'gamma12': 1.0,
+        'gamma21': 20.0,
+        'gamma23': 2.0,
+        'gamma32': 1.0,
+    }
+
     def __init__(
             self,
             endtime,
@@ -28,8 +46,6 @@ class X44(BaseCRNModel):
             model_name="X44",
         )
 
-        epsilon = 0.001
-
         G1 = gillespy.Species(name='G1', initial_value=1)
         G2 = gillespy.Species(name='G2', initial_value=1)
         G3 = gillespy.Species(name='G3', initial_value=0)
@@ -40,22 +56,25 @@ class X44(BaseCRNModel):
 
         self.add_species([G1, G2, G3, P1, P2, P3, P4])
 
-        a11 = gillespy.Parameter(name='a11', expression='100.0')
-        a21 = gillespy.Parameter(name='a21', expression='50.0')
-        a31 = gillespy.Parameter(name='a31', expression='1.0')
-        a32 = gillespy.Parameter(name='a32', expression='1.0')
-        b1 = gillespy.Parameter(name='b1', expression='1.0')
-        b2 = gillespy.Parameter(name='b2', expression='1.0')
-        b3 = gillespy.Parameter(name='b3', expression='1.0')
-        b4 = gillespy.Parameter(name='b4', expression='50.0')  # 50.0 or 200.0
-        b5 = gillespy.Parameter(name='b5', expression='1.0')
-        b6 = gillespy.Parameter(name='b6', expression='100.0')
-        gamma12 = gillespy.Parameter(name='gamma12', expression=epsilon * 1.0)
-        gamma21 = gillespy.Parameter(name='gamma21', expression=epsilon * 20.0)
-        gamma23 = gillespy.Parameter(name='gamma23', expression=epsilon * 2.0)
-        gamma32 = gillespy.Parameter(name='gamma32', expression=epsilon * 1.0)
+        a11 = gillespy.Parameter(name='a11', expression=self.params['a11'])
+        a21 = gillespy.Parameter(name='a21', expression=self.params['a21'])
+        a31 = gillespy.Parameter(name='a31', expression=self.params['a31'])
+        a32 = gillespy.Parameter(name='a32', expression=self.params['a32'])
+        b1 = gillespy.Parameter(name='b1', expression=self.params['b1'])
+        b2 = gillespy.Parameter(name='b2', expression=self.params['b2'])
+        b3 = gillespy.Parameter(name='b3', expression=self.params['b3'])
+        b4 = gillespy.Parameter(name='b4', expression=self.params['b4'])
+        b5 = gillespy.Parameter(name='b5', expression=self.params['b5'])
+        b6 = gillespy.Parameter(name='b6', expression=self.params['b6'])
 
-        self.add_parameter([a11, a21, a31, a32, b1, b2, b3, b4, b5, b6, gamma12, gamma21, gamma23, gamma32])
+        epsilon = gillespy.Parameter(name='epsilon', expression=0.001)
+
+        gamma12 = gillespy.Parameter(name='gamma12', expression=f'epsilon * {self.params["gamma12"]}')
+        gamma21 = gillespy.Parameter(name='gamma21', expression=f'epsilon * {self.params["gamma21"]}')
+        gamma23 = gillespy.Parameter(name='gamma23', expression=f'epsilon * {self.params["gamma23"]}')
+        gamma32 = gillespy.Parameter(name='gamma32', expression=f'epsilon * {self.params["gamma32"]}')
+
+        self.add_parameter([a11, a21, a31, a32, b1, b2, b3, b4, b5, b6, epsilon, gamma12, gamma21, gamma23, gamma32])
 
         r1 = gillespy.Reaction(
             name='r1',

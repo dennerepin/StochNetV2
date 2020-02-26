@@ -1,0 +1,11 @@
+{
+	"n_cells": 2,
+	"cell_size": 2,
+	"expansion_multiplier": 30,
+	"n_states_reduce": 2,
+	"kernel_constraint": "none",
+	"bias_constraint": "none",
+	"kernel_regularizer": "l2",
+	"bias_regularizer": "l2",
+	"activity_regularizer": "none"
+}

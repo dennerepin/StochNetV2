@@ -8,6 +8,15 @@ from stochnet_v2.CRN_models.base import BaseCRNModel
 class Gene(BaseCRNModel):
     """Class for gene regulatory network."""
 
+    params = {
+        'Kp': 350.0,
+        'Kt': 300.0,
+        'Kd1': 0.001,
+        'Kd2': 1.5,
+        'Kb': 166.,
+        'Ku': 1.,
+    }
+
     def __init__(self, endtime, timestep):
         """
         Initialize the model.
@@ -23,17 +32,13 @@ class Gene(BaseCRNModel):
             model_name="Gene",
         )
 
-        self.alpha = 166
-        self.beta = 30
-        self.Psteady = 10000
-
         # Parameters
-        Kp = gillespy.Parameter(name='Kp', expression=350)
-        Kt = gillespy.Parameter(name='Kt', expression=0.001 * self.beta * self.Psteady)
-        Kd1 = gillespy.Parameter(name='Kd1', expression=0.001)
-        Kd2 = gillespy.Parameter(name='Kd2', expression=self.beta * 0.05)
-        Kb = gillespy.Parameter(name='Kb', expression=self.alpha)
-        Ku = gillespy.Parameter(name='Ku', expression=1)
+        Kp = gillespy.Parameter(name='Kp', expression=self.params['Kp'])
+        Kt = gillespy.Parameter(name='Kt', expression=self.params['Kt'])
+        Kd1 = gillespy.Parameter(name='Kd1', expression=self.params['Kd1'])
+        Kd2 = gillespy.Parameter(name='Kd2', expression=self.params['Kd2'])
+        Kb = gillespy.Parameter(name='Kb', expression=self.params['Kb'])
+        Ku = gillespy.Parameter(name='Ku', expression=self.params['Ku'])
         self.add_parameter([Kp, Kt, Kd1, Kd2, Kb, Ku])
 
         # Species
@@ -92,6 +97,10 @@ class Gene(BaseCRNModel):
         self.listOfSpecies['G1'].initial_value = species_initial_value[1]
         self.listOfSpecies['M'].initial_value = species_initial_value[2]
         self.listOfSpecies['P'].initial_value = species_initial_value[3]
+
+    @staticmethod
+    def get_initial_state():
+        return [0, 1, 1, 500]
 
     @staticmethod
     def get_species_names():

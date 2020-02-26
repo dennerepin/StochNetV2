@@ -1,0 +1,131 @@
+[
+	[
+		"categorical",
+		{
+			"hidden_size": "none",
+			"activation": "none",
+			"coeff_regularizer": "none",
+			"kernel_constraint": "none",
+			"bias_constraint": "none",
+			"kernel_regularizer": "l2",
+			"bias_regularizer": "l2"
+		}
+	],
+	[
+		"normal_diag",
+		{
+			"hidden_size": "none",
+			"activation": "none",
+			"mu_regularizer": "none",
+			"diag_regularizer": "l2",
+			"kernel_constraint": "none",
+			"bias_constraint": "none",
+			"kernel_regularizer": "l2",
+			"bias_regularizer": "l2"
+		}
+	],
+	[
+		"normal_diag",
+		{
+			"hidden_size": "none",
+			"activation": "none",
+			"mu_regularizer": "none",
+			"diag_regularizer": "l2",
+			"kernel_constraint": "none",
+			"bias_constraint": "none",
+			"kernel_regularizer": "l2",
+			"bias_regularizer": "l2"
+		}
+	],
+	[
+		"normal_diag",
+		{
+			"hidden_size": "none",
+			"activation": "none",
+			"mu_regularizer": "none",
+			"diag_regularizer": "l2",
+			"kernel_constraint": "none",
+			"bias_constraint": "none",
+			"kernel_regularizer": "l2",
+			"bias_regularizer": "l2"
+		}
+	],
+	[
+		"normal_diag",
+		{
+			"hidden_size": "none",
+			"activation": "none",
+			"mu_regularizer": "none",
+			"diag_regularizer": "l2",
+			"kernel_constraint": "none",
+			"bias_constraint": "none",
+			"kernel_regularizer": "l2",
+			"bias_regularizer": "l2"
+		}
+	],
+	[
+		"normal_diag",
+		{
+			"hidden_size": "none",
+			"activation": "none",
+			"mu_regularizer": "none",
+			"diag_regularizer": "l2",
+			"kernel_constraint": "none",
+			"bias_constraint": "none",
+			"kernel_regularizer": "l2",
+			"bias_regularizer": "l2"
+		}
+	],
+	[
+		"normal_diag",
+		{
+			"hidden_size": "none",
+			"activation": "none",
+			"mu_regularizer": "none",
+			"diag_regularizer": "l2",
+			"kernel_constraint": "none",
+			"bias_constraint": "none",
+			"kernel_regularizer": "l2",
+			"bias_regularizer": "l2"
+		}
+	],
+	[
+		"normal_diag",
+		{
+			"hidden_size": "none",
+			"activation": "none",
+			"mu_regularizer": "none",
+			"diag_regularizer": "l2",
+			"kernel_constraint": "none",
+			"bias_constraint": "none",
+			"kernel_regularizer": "l2",
+			"bias_regularizer": "l2"
+		}
+	],
+	[
+		"normal_diag",
+		{
+			"hidden_size": "none",
+			"activation": "none",
+			"mu_regularizer": "none",
+			"diag_regularizer": "l2",
+			"kernel_constraint": "none",
+			"bias_constraint": "none",
+			"kernel_regularizer": "l2",
+			"bias_regularizer": "l2"
+		}
+	],
+	[
+		"normal_diag",
+		{
+			"hidden_size": "none",
+			"activation": "none",
+			"mu_regularizer": "none",
+			"diag_regularizer": "l2",
+			"kernel_constraint": "none",
+			"bias_constraint": "none",
+			"kernel_regularizer": "l2",
+			"bias_regularizer": "l2"
+		}
+	]
+]

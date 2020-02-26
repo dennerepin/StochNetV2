@@ -17,6 +17,7 @@ def main():
     parser.add_argument('--model_id', type=int, required=True)
     parser.add_argument('--nb_features', type=int, required=True)
     parser.add_argument('--nb_past_timesteps', type=int, required=True)
+    parser.add_argument('--nb_randomized_params', type=int, required=True)
 
     parser.add_argument('--body_config_path', type=str, required=True)
     parser.add_argument('--mixture_config_path', type=str, required=True)
@@ -39,6 +40,7 @@ def main():
     model_id = args.model_id
     nb_features = args.nb_features
     nb_past_timesteps = args.nb_past_timesteps
+    nb_randomized_params = args.nb_randomized_params
 
     body_config_path = args.body_config_path
     mixture_config_path = args.mixture_config_path
@@ -67,6 +69,7 @@ def main():
     nn = NASStochNet(
         nb_past_timesteps=nb_past_timesteps,
         nb_features=nb_features,
+        nb_randomized_params=nb_randomized_params,
         project_folder=project_folder,
         timestep=timestep,
         dataset_id=dataset_id,
@@ -112,14 +115,15 @@ if __name__ == "__main__":
 
 """
 python stochnet_v2/scripts/train_search.py \
-    --project_folder='/home/dn/DATA/EGFR' \
-    --timestep=0.2 \
-    --dataset_id=1 \
-    --model_id=1 \
-    --nb_features=23 \
+    --project_folder='/home/dn/DATA/SIR' \
+    --timestep=0.5 \
+    --dataset_id=3 \
+    --model_id=3002 \
+    --nb_features=3 \
     --nb_past_timesteps=1 \
-    --body_config_path='/home/dn/DATA/EGFR/body_config_search.json' \
-    --mixture_config_path='/home/dn/DATA/EGFR/mixture_config_search.json' \
+    --nb_randomized_params=2 \
+    --body_config_path='/home/dn/DATA/SIR/body_config_search.json' \
+    --mixture_config_path='/home/dn/DATA/SIR/mixture_config_search.json' \
     --n_epochs_main=10 \
     --n_epochs_heat_up=2 \
     --n_epochs_arch=2 \

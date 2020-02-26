@@ -34,14 +34,17 @@ def get_nn_histogram_data(
         model_id,
         nb_past_timesteps,
         nb_features,
+        nb_randomized_params,
         n_steps,
         n_traces_per_setting,
         path_to_save_generated_data=None,
         add_timestamps=True,
+        keep_params=False,
 ):
     nn = StochNet(
         nb_past_timesteps=nb_past_timesteps,
         nb_features=nb_features,
+        nb_randomized_params=nb_randomized_params,
         project_folder=project_folder,
         timestep=timestep,
         dataset_id=dataset_id,
@@ -52,7 +55,7 @@ def get_nn_histogram_data(
     project_explorer = ProjectFileExplorer(project_folder)
     dataset_explorer = project_explorer.get_dataset_file_explorer(timestep, dataset_id)
     histogram_data = np.load(dataset_explorer.histogram_dataset_fp)
-    initial_settings = histogram_data[:, 0, 0:nb_past_timesteps, -nb_features:]
+    initial_settings = histogram_data[:, 0, 0:nb_past_timesteps, -(nb_features+nb_randomized_params):]
 
     LOGGER.info("Start generating NN traces")
     cnt = 0
@@ -68,6 +71,7 @@ def get_nn_histogram_data(
                 curr_state_rescaled=False,
                 round_result=True,
                 add_timestamps=add_timestamps,
+                keep_params=keep_params,
             )
             LOGGER.info(f"Done. generated data shape: {traces.shape}")
             if path_to_save_generated_data:
@@ -212,6 +216,7 @@ def evaluate(
         timestep,
         dataset_id,
         model_id,
+        nb_randomized_params,
         nb_past_timesteps=1,
         n_bins=100,
         distance_kind='iou',
@@ -226,6 +231,7 @@ def evaluate(
     dataset_explorer = project_explorer.get_dataset_file_explorer(timestep, dataset_id)
 
     histogram_data = np.load(dataset_explorer.histogram_dataset_fp)
+    histogram_data = histogram_data[..., :-nb_randomized_params]
 
     n_settings, n_traces, n_steps, n_species = histogram_data.shape
     if with_timestamps:
@@ -253,10 +259,12 @@ def evaluate(
         model_id=model_id,
         nb_past_timesteps=nb_past_timesteps,
         nb_features=n_species,
+        nb_randomized_params=nb_randomized_params,
         n_steps=n_steps-1,
         n_traces_per_setting=n_traces,
         path_to_save_generated_data=path_to_save_nn_traces,
         add_timestamps=with_timestamps,
+        keep_params=False,
     )
     end = time()
     LOGGER.info(f"Took {end - start:.1f} seconds")

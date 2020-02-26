@@ -18,6 +18,7 @@ def build_simulation_dataset(
         timestep,
         endtime,
         dataset_folder,
+        params_to_randomize=None,
         prefix='partial_',
         how='concat',
         **kwargs,
@@ -41,6 +42,7 @@ def build_simulation_dataset(
     timestep : discrete time-step for simulations.
     endtime : end-time for simulations.
     dataset_folder : folder to store results and related data, such as initial settings.
+    params_to_randomize : list of string names of model parameters to randomize.
     prefix : string prefix for temporary files.
     how : string, one of {'concat', 'stack'}. Defines final shape of returned dataset.
         'concat' is used for training dataset;
@@ -60,6 +62,7 @@ def build_simulation_dataset(
         timestep,
         endtime,
         dataset_folder,
+        params_to_randomize=params_to_randomize,
         prefix=prefix,
         **kwargs,
     )
@@ -126,6 +129,7 @@ def _perform_simulations(
         timestep,
         endtime,
         dataset_folder,
+        params_to_randomize,
         prefix='partial_',
         settings_filename='settings.npy',
 ):
@@ -137,11 +141,23 @@ def _perform_simulations(
     crn_class = getattr(crn_module, model_name)
     crn_instance = crn_class(endtime, timestep)
 
+    param_settings = []
+    if params_to_randomize is not None:
+        randomized = crn_instance.get_randomized_parameters(params_to_randomize, nb_settings)
+        for i in range(nb_settings):
+            d = {}
+            for key in randomized:
+                d[key] = randomized[key][i]
+            param_settings.append(d)
+
     count = (multiprocessing.cpu_count() // 3) * 2 + 1
     LOGGER.info(" ===== CPU Cores used for simulations: %s =====" % count)
     pool = multiprocessing.Pool(processes=count)
 
-    kwargs = [(settings[n], n) for n in range(nb_settings)]
+    if param_settings:
+        kwargs = [(settings[n], n, param_settings[n]) for n in range(nb_settings)]
+    else:
+        kwargs = [(settings[n], n, None) for n in range(nb_settings)]
 
     task = partial(
         _single_simulation,
@@ -159,6 +175,7 @@ def _perform_simulations(
 def _single_simulation(
         initial_values,
         id_number,
+        params_dict,
         crn_instance,
         nb_trajectories,
         dataset_folder,
@@ -166,12 +183,22 @@ def _single_simulation(
 ):
     """Helper single-thread function."""
     crn_instance.set_species_initial_value(initial_values)
+
+    if params_dict is not None:
+        crn_instance.set_parameters(params_dict)
+
     trajectories = crn_instance.run(
         number_of_trajectories=nb_trajectories,
         solver=StochKitSolver,
         show_labels=False
     )
     data = np.array(trajectories)
+
+    if params_dict is not None:
+        vals = np.array(list(params_dict.values()))
+        x = np.ones(list(data.shape[:-1]) + [1]) * vals
+        data = np.concatenate([data, x], axis=-1)
+
     _save_simulation_data(data, dataset_folder, prefix, id_number)
 
 
