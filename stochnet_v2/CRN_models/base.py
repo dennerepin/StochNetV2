@@ -1,4 +1,5 @@
-import gillespy
+# import gillespy
+import gillespy2 as gillespy
 import numpy as np
 import math
 import libsbml

@@ -1,5 +1,6 @@
 bidict
-gillespy
+# gillespy  # https://github.com/johnabel/gillespy
+gillespy2  # https://github.com/gillespy2/GillesPy2
 graphviz
 h5py
 libsbml

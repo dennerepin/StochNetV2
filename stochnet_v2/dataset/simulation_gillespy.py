@@ -4,7 +4,6 @@ import numpy as np
 import os
 
 from functools import partial
-from gillespy import StochKitSolver
 from importlib import import_module
 from tqdm import tqdm
 
@@ -189,7 +188,6 @@ def _single_simulation(
 
     trajectories = crn_instance.run(
         number_of_trajectories=nb_trajectories,
-        solver=StochKitSolver,
         show_labels=False
     )
     data = np.array(trajectories)

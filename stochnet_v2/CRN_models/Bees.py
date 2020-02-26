@@ -1,4 +1,5 @@
-import gillespy
+# import gillespy
+import gillespy2 as gillespy
 import numpy as np
 
 from stochnet_v2.CRN_models.base import BaseCRNModel
@@ -140,7 +141,7 @@ class Bees(BaseCRNModel):
     @staticmethod
     def get_initial_state():
         """Returns list of species initial values."""
-        return [80, 20, 0, 10]
+        return [100, 20, 0, 10]
 
     @classmethod
     def get_initial_settings(cls, n_settings, sigm=0.5):
@@ -172,7 +173,8 @@ class Bees(BaseCRNModel):
                 low = 0
                 high = 1
             else:
-                low = int(val * sigm)
+                # low = int(val * sigm)
+                low = 0
                 high = val + int(val * sigm)
             settings[:, i] = np.random.randint(low, high, n_settings)
         return settings
