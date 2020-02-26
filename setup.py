@@ -39,7 +39,7 @@ setup(
         'matplotlib',
         'numpy>=1.16',
         'scikit-learn',
-        'tensorflow==1.14',
+        'tensorflow==1.15.2',
         'tensorflow-probability==0.7.0',
         'tqdm',
     ],
