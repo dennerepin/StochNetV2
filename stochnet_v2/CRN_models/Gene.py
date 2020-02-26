@@ -32,10 +32,6 @@ class Gene(BaseCRNModel):
             model_name="Gene",
         )
 
-        # self.alpha = 166
-        # self.beta = 30
-        # self.Psteady = 10000
-
         # Parameters
         Kp = gillespy.Parameter(name='Kp', expression=self.params['Kp'])
         Kt = gillespy.Parameter(name='Kt', expression=self.params['Kt'])

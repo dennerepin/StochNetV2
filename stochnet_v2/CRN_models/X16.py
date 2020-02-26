@@ -15,6 +15,8 @@ class X16(BaseCRNModel):
         'a12': 2.0,
         'a21': 500.0,
         'b1': 2.0,
+        'gamma12': 1.0,
+        'gamma21': 1.0,
     }
 
     def __init__(
@@ -36,8 +38,6 @@ class X16(BaseCRNModel):
             model_name="X16",
         )
 
-        epsilon = 0.01
-
         G1 = gillespy.Species(name='G1', initial_value=1)
         G2 = gillespy.Species(name='G2', initial_value=1)
         P1 = gillespy.Species(name='P1', initial_value=100)
@@ -48,10 +48,13 @@ class X16(BaseCRNModel):
         a12 = gillespy.Parameter(name='a12', expression=self.params['a12'])
         a21 = gillespy.Parameter(name='a21', expression=self.params['a21'])
         b1 = gillespy.Parameter(name='b1', expression=self.params['b1'])
-        gamma12 = gillespy.Parameter(name='gamma12', expression=epsilon * 1.0)
-        gamma21 = gillespy.Parameter(name='gamma21', expression=epsilon * 1.0)
 
-        self.add_parameter([a11, a12, a21, b1, gamma12, gamma21])
+        epsilon = gillespy.Parameter(name='epsilon', expression=0.01)
+
+        gamma12 = gillespy.Parameter(name='gamma12', expression=f'epsilon * {self.params["gamma12"]}')
+        gamma21 = gillespy.Parameter(name='gamma21', expression=f'epsilon * {self.params["gamma21"]}')
+
+        self.add_parameter([a11, a12, a21, b1, epsilon, gamma12, gamma21])
 
         r1 = gillespy.Reaction(
             name='r1',

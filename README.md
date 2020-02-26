@@ -218,6 +218,23 @@ network body part and then used to sample the next state of the model.
 Mixture is composed of one 'categorical' random variable and (a combination of) several 'normal' 
 components (e.g. 'normal_diag', 'normal_tril', or 'log_normal_diag').
 
+##### Configuration parameters.
+
+* `hidden_size` parameter defines network 'width', i.e. the number of layer activations. \
+  *Note:* for mixture components it can also take 'none' value: then 
+  only one Dense layer will be used to transform features extracted by the body 
+  part into distribution parameters. Otherwise, additional two Dense layers of this size
+  and a residual connection will be added.
+* `activation`: activation type to apply to layer activations. Supported keywords are 
+  'relu', 'relu6', 'swish', 'leakyrelu', 'prelu', 'elu', and 'none' for no activation.
+* `regularizer`: regularization to apply to either layer activations 
+  (`activity_regularizer`, `mu_regularizer`, `diag_regularizer`, `sub_diag_regularizer`) 
+  or network parameters (`kernel_regularizer`, `bias_regularizer`). 
+  Supported keywords are 'l1', 'l2', 'l1_l2', and 'none'.
+* `constraint`: constraints for network parameters (`kernel_constraint`, `bias_constraint`).
+  Supported keywords are 'maxnorm' (with max-norm=3.0), 'minmaxnorm' 
+  (with min-norm=0.0 and max-norm=3.0), 'unitnorm', and 'none'.
+  
 
 #### 3.1.2. Training (static)
 
@@ -231,10 +248,10 @@ Once StochNet is initialized, it can be trained with Trainer.
         n_epochs=n_epochs,
         batch_size=batch_size,
         learning_strategy=learning_strategy,
-        ckpt_path=None,  # optional, checkpoint to restore network weights
-        dataset_kind=dataset_kind,  # 'hdf5' or 'tfrecord'
-        add_noise=True,  # optional data augmentation: add noise to nn inputs
-        stddev=0.01,  # standard deviation of added noise
+        ckpt_path=None,             # optional, checkpoint to initialize weights before training
+        dataset_kind='hdf5',
+        add_noise=True,             # optional data augmentation: add noise to nn inputs
+        stddev=0.01,                # standard deviation of added noise
     )
 
 `LearningStrategy` objects define hyper-parameters for training. One can use
@@ -309,7 +326,7 @@ Every mix-layer represents a set of candidate operations, listed in
 `stochnet_v2.dynamic_classes.genotypes.PRIMITIVES`. The latter `n_states_reduce` states 
 of a cell are averaged to produce its output. `expansion_multiplier` parameter controls 
 the 'width' of the network: if an expanding cell receives `n` features, it will output 
-`n * expansion_multiplier` features. See https://arxiv.org/abs/2002.01889 for further details.\
+`n * expansion_multiplier` features. See https://arxiv.org/abs/2002.01889 for further details.
 
 Mixture config is the same as in section 3.1.1.
 

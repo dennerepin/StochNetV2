@@ -547,14 +547,14 @@ class StochNet:
         # [n_steps, n_traces, n_settings, nb_features] -> [n_settings, n_traces, n_steps, nb_features]
         traces = np.transpose(traces, (2, 1, 0, 3))
 
+        if not keep_params:
+            traces = traces[..., :self.nb_features]
+
         if add_timestamps:
             timespan = np.arange(0, (n_steps+1) * self.timestep, self.timestep)[:n_steps+1]
             timespan = np.tile(timespan, reps=(n_settings, n_traces, 1))
             timespan = timespan[..., np.newaxis]
             traces = np.concatenate([timespan, traces], axis=-1)
-
-        if not keep_params:
-            traces = traces[..., :self.nb_features]
 
         return traces
 

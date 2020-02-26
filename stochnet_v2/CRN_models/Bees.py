@@ -103,7 +103,6 @@ class Bees(BaseCRNModel):
             reactants={Bee: 1, P: 1},
             products={BeeA: 1, P: 1},
             propensity_function='become_aggressive_rate * Bee * (L / (1 + pow(exp,-s*P)) - L/2)',
-            # rate=become_aggressive_rate,
         )
 
         # calm_down = gillespy.Reaction(

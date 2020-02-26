@@ -1,0 +1,15 @@
+LUIGI_CONFIG_PATH=/home/dn/DATA/PARAMETERIZED/X16/X16.cfg python -m luigi --module stochnet_v2.utils.luigi_workflow GenerateDataset --log-level=INFO --local-scheduler
+
+LUIGI_CONFIG_PATH=/home/dn/DATA/PARAMETERIZED/X16/X16.cfg python -m luigi --module stochnet_v2.utils.luigi_workflow FormatDataset --log-level=INFO --local-scheduler
+
+LUIGI_CONFIG_PATH=/home/dn/DATA/PARAMETERIZED/X16/X16.cfg python -m luigi --module stochnet_v2.utils.luigi_workflow GenerateHistogramData --log-level=INFO --local-scheduler
+
+LUIGI_CONFIG_PATH=/home/dn/DATA/PARAMETERIZED/X16/X16.cfg python -m luigi --module stochnet_v2.utils.luigi_workflow TrainStatic --log-level=INFO --local-scheduler
+
+LUIGI_CONFIG_PATH=/home/dn/DATA/PARAMETERIZED/X16/X16.cfg python -m luigi --module stochnet_v2.utils.luigi_workflow TrainSearch --log-level=INFO --local-scheduler
+
+LUIGI_CONFIG_PATH=/home/dn/DATA/PARAMETERIZED/X16/X16.cfg python -m luigi --module stochnet_v2.utils.luigi_workflow Evaluate --log-level=INFO --local-scheduler
+
+
+# SHOW LUIGI VISUALIZATION: omit --local-scheduler and open http://localhost:8082
+luigid --logdir /home/dn/logs --state-path /home/dn/logs/state.pickle --background

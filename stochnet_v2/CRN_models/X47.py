@@ -9,6 +9,17 @@ class X47(BaseCRNModel):
     Class for (47) model defined in https://arxiv.org/pdf/1801.09200.pdf.
     For training: timestep=100.0, endtime=1000.
     """
+
+    params = {
+        'a11': 100.0,
+        'b1': 1.0,
+        'b2': 1.0,
+        'b3': 10.0,
+        'b4': 1.0,
+        'gamma12': 1.0,
+        'gamma21': 1.5,
+    }
+
     def __init__(
             self,
             endtime,
@@ -28,8 +39,6 @@ class X47(BaseCRNModel):
             model_name="X47",
         )
 
-        epsilon = 0.001
-
         G1 = gillespy.Species(name='G1', initial_value=1)
         G2 = gillespy.Species(name='G2', initial_value=1)
         P1 = gillespy.Species(name='P1', initial_value=100)
@@ -37,21 +46,23 @@ class X47(BaseCRNModel):
 
         self.add_species([G1, G2, P1, P2])
 
-        a11 = gillespy.Parameter(name='a11', expression='100.0')
-        b1 = gillespy.Parameter(name='b1', expression='1.0')
-        b2 = gillespy.Parameter(name='b2', expression='1.0')
-        b3 = gillespy.Parameter(name='b3', expression='10.0')
-        b4 = gillespy.Parameter(name='b4', expression='1.0')
-        gamma12 = gillespy.Parameter(name='gamma12', expression=epsilon * 1.0)
-        gamma21 = gillespy.Parameter(name='gamma21', expression=epsilon * 1.5)
+        a11 = gillespy.Parameter(name='a11', expression=self.params['a11'])
+        b1 = gillespy.Parameter(name='b1', expression=self.params['b1'])
+        b2 = gillespy.Parameter(name='b2', expression=self.params['b2'])
+        b3 = gillespy.Parameter(name='b3', expression=self.params['b3'])
+        b4 = gillespy.Parameter(name='b4', expression=self.params['b4'])
 
-        self.add_parameter([a11, b1, b2, b3, b4, gamma12, gamma21])
+        epsilon = gillespy.Parameter(name='epsilon', expression=0.001)
+
+        gamma12 = gillespy.Parameter(name='gamma12', expression=f'epsilon * {self.params["gamma12"]}')
+        gamma21 = gillespy.Parameter(name='gamma21', expression=f'epsilon * {self.params["gamma21"]}')
+
+        self.add_parameter([a11, b1, b2, b3, b4, epsilon, gamma12, gamma21])
 
         r1 = gillespy.Reaction(
             name='r1',
             reactants={G1: 1, P2: 2},
             products={G1: 1, P1: 1, P2: 1},
-            # rate=a11,
             propensity_function='a11 * G1 * P2 * (P2 - 1)',
         )
 
@@ -80,7 +91,6 @@ class X47(BaseCRNModel):
             name='r4',
             reactants={P1: 1, P2: 2},
             products={P2: 3},
-            # rate=b4,
             propensity_function='b4 * P1 * P2 * (P2 - 1)',  # 'b4 * P1 * P2 * P2'
         )
 
