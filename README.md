@@ -3,9 +3,26 @@
 Toolbox for stochastic simulations with CRN models or their deep abstractions. \
 Abstract models are based on neural networks predicting a distribution to sample next system state.
 
+## Table of contents
+1. [CRN_models](#crn_models)
+2. [Dataset](#dataset)
+3. [StochNet and NASStochNet](#stochnets)\
+    3.1.1. [StochNet](#stochnet)\
+    3.1.2. [StochNet Training](#train_stochnet)\
+    3.2.1. [NASStochNet](#nasstochnet)\
+    3.2.2. [NASStochNet Training](#train_nasstochnet)\
+    3.3. [Simulations with StochNet](#simulation)\
+    3.4. [Evaluation](#eval)
+4. [Utils](#utils)\
+    4.1. [Helper functions](#hepler)\
+    4.2. [File Organisation](#files)
+5. [High-level scripts](#scripts)
+6. [Luigi workflow manager](#luigi)
+7. [GridRunner](#gridrunner)
+
 ## Classes and Modules
 
-### 1. CRN_models.
+### 1. CRN_models.<a name="crn_models"></a>
 The module contains base- and example- classes defining CRN models. 
 This models can be simulated with Gillepie algorithm provided by `gillespy` package. \
 CRN models are used as a source of synthetic data to train and evaluate abstract models.
@@ -40,7 +57,7 @@ editing reaction rates formulas, rewriting reversible reactions as two separate 
 See `BaseSBMLModel` and `EGFR` classes for examples.
 
 
-### 2. Dataset.
+### 2. Dataset. <a name="dataset"></a>
 The `dataset` module implements functions and classes to create and operate trajectories data.\
 Function `build_simulation_dataset` utilizes multiprocessing tools for faster parallel simulations.\
 The `DataTransformer` class prepares generated trajectories by splitting into training examples, 
@@ -111,9 +128,9 @@ as input and output correspondingly.
 `Dataset` is python iterable, and yields batches of training examples. 
 
 
-### 3. StochNet and NASStochNet
+### 3. StochNet and NASStochNet <a name="stochnets"></a>
 
-#### 3.1.1. StochNet (static model)
+#### 3.1.1. StochNet (static model) <a name="stochnet"></a>
 `StochNet` class implements an interface for an abstract model. 
 It is wrapped around a neural network (Mixture Density Network) which can be trained on 
 simulations dataset and then used to produce trajectories.
@@ -236,7 +253,7 @@ components (e.g. 'normal_diag', 'normal_tril', or 'log_normal_diag').
   (with min-norm=0.0 and max-norm=3.0), 'unitnorm', and 'none'.
   
 
-#### 3.1.2. Training (static)
+#### 3.1.2. Training (static) <a name="train_stochnet"></a>
 
 Once StochNet is initialized, it can be trained with Trainer.
     
@@ -284,7 +301,7 @@ Once training is finished, all necessary files are saved to the model folder
 mode for simulations any time.
 
 
-#### 3.2.1. NASStochNet (dynamic, Neural Architecture Search)
+#### 3.2.1. NASStochNet (dynamic, Neural Architecture Search) <a name="nasstochnet"></a>
 As an alternative to custom selection, we can search for the configuration of the body-part 
 of StochNet. An over-parameterized, brunching network is built first, where instead of one 
 concrete layer it has a set of layer-candidates, and these mix-layers are all inter-connected. 
@@ -331,7 +348,7 @@ the 'width' of the network: if an expanding cell receives `n` features, it will 
 Mixture config is the same as in section 3.1.1.
 
 
-#### 3.2.2. Training (Architecture Search)
+#### 3.2.2. Training (Architecture Search) <a name="train_nasstochnet"></a>
 
 For the Architecture Search, training consists of two stages: 
  * searching for optimal configuration
@@ -393,7 +410,7 @@ and the model can be loaded in 'inference' mode for simulations. Either `StochNe
 can be used to load trained model and run simulations.
 
 
-#### 3.3. Simulations with StochNet
+#### 3.3. Simulations with StochNet <a name="simulation"></a>
 
 For simulations, trained model can be loaded in 'inference' mode:
 
@@ -450,7 +467,7 @@ To simulate trajectories starting from `inputs`, run
 Returned array of trajectories has shape (n_settings, n_traces, n_steps, nb_features).
 
 
-#### 3.4. Evaluation
+#### 3.4. Evaluation <a name="eval"></a>
 
 To evaluate the quality of abstract models, we compare distributions (histograms) of species 
 of interest. For this, we simulate many trajectories of the original model starting from 
@@ -515,9 +532,9 @@ Example:
     )
 
 
-### 4. Utils
+### 4. Utils <a name="utils"></a>
 
-#### 4.1. Helper functions
+#### 4.1. Helper functions <a name="helper"></a>
 
 Various helper functions are implemented in `stochnet_v2.utils`:
  * `benchmarking`: measure simulation times for original CRN models (Gillespie algorithm) 
@@ -583,7 +600,7 @@ Various helper functions are implemented in `stochnet_v2.utils`:
             visualize_genotypes(genotypes, './visualizations/model_genotype.pdf')
             
 
-### 4.2. File Organisation
+### 4.2. File Organisation <a name="files"></a>
 
 We use `FileExplorer` helper classes to maintain uniform file structure. 
 These classes store paths for saving and reading files, such as dataset files, model files, configs, 
@@ -634,7 +651,7 @@ evaluation results, etc. See `stochnet_v2.utils.file_organisation` for details.
                                 * <time-lag>/
 
 
-### 5. High-level scripts
+### 5. High-level scripts <a name="scripts"></a>
 
 After properly defining a CRN model, the workflow takes the following actions:
 * generate dataset of trajectories
@@ -725,7 +742,7 @@ Module `stochnet_v2.scripts` contains scripts to run these tasks:
 Config files for MDN body and mixture parts should be filled as shown in Sect. 3.
 
 
-### 6. Luigi workflow manager
+### 6. Luigi workflow manager <a name="luigi"></a>
 
 The above workflow is wrapped with `luigi` library designed for running complex pipelines 
 of inter-dependent tasks. \
@@ -795,7 +812,7 @@ TrainStatic and TrainSearch, one should leave uncommented corresponding line in
         ]
 
 
-### 7. GridRunner
+### 7. GridRunner <a name="gridrunner"></a>
 
 `GridRunner` implements simulation of multiple CRN instances on a (spatial) grid 
 with communication via spreading a subset of species across neighboring grid nodes. \
