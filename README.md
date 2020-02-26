@@ -14,7 +14,7 @@ Abstract models are based on neural networks predicting a distribution to sample
     3.3. [Simulations with StochNet](#simulation)\
     3.4. [Evaluation](#eval)
 4. [Utils](#utils)\
-    4.1. [Helper functions](#hepler)\
+    4.1. [Helper functions](#helper)\
     4.2. [File Organisation](#files)
 5. [High-level scripts](#scripts)
 6. [Luigi workflow manager](#luigi)
