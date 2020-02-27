@@ -141,7 +141,7 @@ class Bees(BaseCRNModel):
     @staticmethod
     def get_initial_state():
         """Returns list of species initial values."""
-        return [100, 20, 0, 10]
+        return [20, 0, 0, 10]
 
     @classmethod
     def get_initial_settings(cls, n_settings, sigm=0.5):
@@ -165,7 +165,7 @@ class Bees(BaseCRNModel):
         settings = np.zeros((n_settings, n_species))
 
         for i in range(n_species):
-            if i in [3]:
+            if i in [2]:
                 settings[:, i] = 0.
                 continue
             val = initial_state[i]

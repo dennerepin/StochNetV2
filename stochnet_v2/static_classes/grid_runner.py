@@ -274,7 +274,7 @@ class GridRunner:
             non_zero_state[:, np.newaxis, :],  # [n_settings, 1, nb_features]
             curr_state_rescaled=False,
             scale_back_result=True,
-            round_result=False,
+            round_result=True,
             n_samples=1,
         )
         next_state = np.squeeze(next_state[0], 1)

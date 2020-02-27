@@ -66,6 +66,10 @@ def _get_mixture(config, sample_space_dimension):
 
 
 class StochNet:
+    """
+    Main class containing Mixture Density Network (MDN) neural network.
+    After trained by Trainer, can be re-initialized for predicting trajectories.
+    """
 
     def __init__(
             self,
@@ -81,6 +85,41 @@ class StochNet:
             ckpt_path=None,
             mode='normal',
     ):
+        """
+        Initialize model.
+        Model can be initialized in three modes:
+            * normal - build MDN for training
+            * inference - load trained model (from frozen graph). In this mode it can not be trained.
+            * inference_ckpt - load model from a training checkpoint. Can be trained further,
+              as well as produce predictions. However, as the graph created in this mode is trainable,
+              it is not optimised for predictions, i.e. has many redundancies.
+
+        Parameters
+        ----------
+        nb_past_timesteps : number of time-steps model can observe in past to make a prediction.
+            This number is reflected in the input shape: (bs, nb_past_timesteps, nb_features + nb_randomized_params)
+        nb_features : number of CRN model features (i.e. species).
+        nb_randomized_params : number of CRN model randomized params. MDN takes params values as additional inputs:
+            for input of shape (bs, nb_past_timesteps, nb_features + nb_randomized_params) it samples
+            outputs of shape   (bs, nb_past_timesteps, nb_features).
+        project_folder : root folder for current project (CRN model).
+        timestep : time-step between two consecutive states of CRN (which are basically input
+            and ground-truth output of MDN). Used to find dataset-related files such as scaler, and
+            save/find self model-related files.
+        dataset_id : ID number of training dataset. Used to find dataset-related files such as scaler.
+        model_id : ID number of the model (self) save/find related files.
+        body_config_path : path to a .json configuration file, defining body-part of MDN
+            (body_fn_name, block_name, n_blocks, hidden_size, use_batch_norm, activation, constraints and regularisers).
+            This config will be copied to the model folder during initialization.
+            If None, then it will try to find it in the model folder.
+        mixture_config_path : path to a .json configuration file, defining mixture-part of MDN
+            (number and types of components, their hidden_size, activation functions, constraints and regularisers).
+            This config will be copied to the model folder during initialization.
+            If None, then it will try to find it in the model folder.
+        ckpt_path : path to a checkpoint file to initialize model parameters (in 'normal' mode),
+            or re-create model graph and initialize parameters (in 'inference_ckpt' mode).
+        mode : mode to build the model.
+        """
         self.nb_past_timesteps = nb_past_timesteps
         self.nb_features = nb_features
         self.nb_randomized_params = nb_randomized_params
@@ -197,6 +236,13 @@ class StochNet:
         self.description_graphkeys = self.top_layer_obj.description_graphkeys
 
     def restore_from_checkpoint(self, ckpt_path):
+        """Restore model parameters from a training checkpoint.
+
+        Parameters
+        ----------
+        ckpt_path : path to .ckpt file. Tensorflow checkpoints go in three files typically,
+            therefore last part of ckpt file-name ('.index', '.meta', '.XXXX-of-XXXX) should be omitted.
+        """
         with self.graph.as_default():
             variables = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES)
             saver = tf.compat.v1.train.Saver(var_list=variables)
@@ -204,6 +250,20 @@ class StochNet:
         self.restored = True
 
     def save(self):
+        """Save model and all related information.
+        Saves model frozen-graph and its important graph-keys:
+            input_placeholder : name of input tensor
+            pred_tensor : name of body-part output tensor
+            pred_placeholder : name of mixture-part input tensor
+            sample_shape_placeholder : name input tensor specifying sample_shape (i.e. number of samples)
+            sample_tensor : name of mixture-part output tensor (samples of mixture distribution)
+            description_graphkeys : tensors corresponding to the parameters of the mixture components.
+                Used to produce distribution description.
+
+        Returns
+        -------
+
+        """
         if not self.restored:
             raise NotRestoredVariables()
         self._save_frozen_graph()
@@ -291,6 +351,27 @@ class StochNet:
             current_state_rescaled=False,
             visualize=False,
     ):
+        """
+        Create description of the mixture distribution.
+        For every input (current_state), the model predicts parameters specifying
+        mixture distribution (nn_prediction), and then samples from this distribution.
+        So one can use already computed nn_prediction values, or current_state values
+        (and nn_prediction will be computed by the model naturally.)
+
+        Parameters
+        ----------
+        nn_prediction_val : values of body-part outputs.
+        current_state_val : input values (CRN model state).
+        current_state_rescaled : boolean, whether or not inputs are rescaled with dataset scaler.
+            If False, inputs will be first rescaled: as model is usually trained on rescaled data,
+            inputs should be also rescaled.
+        visualize : boolean, if True, will create figures (which can be automatically displayed in jupyter).
+
+        Returns
+        -------
+        Description dictionary containing parameters of mixture distribution components.
+
+        """
         if nn_prediction_val is None:
             if current_state_val is None:
                 raise ValueError("Should provide either current_state_val or nn_prediction_val")
@@ -396,6 +477,7 @@ class StochNet:
     #         pickle.dump(self.scaler, file)
 
     def rescale(self, data):
+        """Apply scaler to data."""
         if isinstance(self.scaler, StandardScaler):
             try:
                 data = (data - self.scaler.mean_) / self.scaler.scale_
@@ -411,6 +493,7 @@ class StochNet:
         return data
 
     def scale_back(self, data):
+        """Apply scaler inverse transform to data."""
         if isinstance(self.scaler, StandardScaler):
             try:
                 data = data * self.scaler.scale_ + self.scaler.mean_
@@ -426,6 +509,19 @@ class StochNet:
         return data
 
     def predict(self, curr_state_values):
+        """
+        Return prediction values for mixture components.
+        This values then can be forwarded to `sample` method for sampling next state.
+        Values should be rescaled first.
+
+        Parameters
+        ----------
+        curr_state_values : input values (CRN model state). Should be rescaled first.
+
+        Returns
+        -------
+        prediction_values : array of (concatenated) prediction values for mixture components.
+        """
 
         if not self.restored:
             raise NotRestoredVariables()
@@ -439,6 +535,18 @@ class StochNet:
         return prediction_values
 
     def sample(self, prediction_values, sample_shape=()):
+        """
+        Sample from mixture distribution, defined by input prediction_values.
+
+        Parameters
+        ----------
+        prediction_values : prediction values for mixture components, (returned by `predict` method).
+        sample_shape : shape defining the number of samples: sample_shape=(n_samples,)
+
+        Returns
+        -------
+        sample : array of samples from mixture distribution
+        """
         if self.sample_tensor is None:
             self._build_sampling_graph()
 
@@ -460,6 +568,23 @@ class StochNet:
             round_result=False,
             n_samples=1,
     ):
+        """
+        Sample next state given values of the current sate.
+        The current sate should have shape [n_settings, nb_past_timesteps, nb_features + nb_randomized_params].
+
+        Parameters
+        ----------
+        curr_state_values : input values (CRN model state).
+        curr_state_rescaled : whether or not values are already rescaled. If False, will apply scaler first.
+        scale_back_result : whether or not returned values should be scaled back to the original scale.
+        round_result : whether or not round returned values (only if scaled back) to imitate
+            discrete population dynamics.
+        n_samples : number of samples to produce.
+
+        Returns
+        -------
+        next_state : array of samples of shape [n_samples, n_settings, nb_past_timesteps, nb_features]
+        """
         # curr_state_values ~ [n_settings, 1, nb_features]
         if not curr_state_rescaled:
             curr_state_values = self.rescale(curr_state_values)
@@ -487,6 +612,33 @@ class StochNet:
             keep_params=False,
             batch_size=150,
     ):
+        """
+        Generate trajectories of the model.
+        Trajectories are simulated by consecutive sampling next state for n_steps times.
+        The current sate should have shape [n_settings, nb_past_timesteps, nb_features + nb_randomized_params].
+
+        Parameters
+        ----------
+        curr_state_values : input values (CRN model state).
+        n_steps : length of trajectories to simulate.
+        n_traces : number of trajectories starting from every initial state
+        curr_state_rescaled : whether or not values are already rescaled. If False, will apply scaler first.
+        scale_back_result : whether or not returned values should be scaled back to the original scale.
+        round_result : whether or not round returned values (only if scaled back) to imitate
+            discrete population dynamics.
+        add_timestamps : if True, time-step indexes will be added (as 0-th feature)
+        keep_params : whether or not to keep randomized parameters in trajectories.
+            If False, returned traces will have shape , [n_settings, n_traces, n_steps, nb_features]
+            otherwise [n_settings, n_traces, n_steps, nb_features + nb_randomized_params]
+        batch_size : batch size to use for simulations. For great number of simulations, it is more
+            efficient to feed the neural network with reasonably-sized chunks of data.
+        Returns
+        -------
+
+        traces : array of shape [n_settings, n_traces, n_steps, nb_features]
+            or [n_settings, nb_past_timesteps, nb_features + nb_randomized_params],
+            depending on the `keep_params` parameter.
+        """
         n_settings, *state_shape = curr_state_values.shape
 
         traces_final_shape = (n_steps + 1, n_traces, n_settings, *state_shape)
