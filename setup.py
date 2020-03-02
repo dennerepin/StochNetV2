@@ -1,20 +1,25 @@
 import os
+from itertools import takewhile
 from setuptools import setup
 from setuptools import find_packages
 
 
-here = os.path.abspath(os.path.dirname(__file__))
+_HERE = os.path.abspath(os.path.dirname(__file__))
+_REQUIREMENTS_PATH = os.path.join(_HERE, 'requirements.txt')
 
-with open(os.path.join(here, 'README.md'), encoding='utf-8') as f:
-    long_description = f.read()
+
+def _get_requirements():
+    with open(_REQUIREMENTS_PATH, 'r') as file:
+        lines = [line.strip() for line in file.readlines()]
+        lines = [''.join(takewhile(lambda c: c != ' ', line)) for line in lines]
+    return lines
 
 
 setup(
     name='StochNetV2',
-    version='0.0.1',
+    version='1.0.0',
     description='Package implements workflow for approximation dynamics '
                 'of reaction networks with muxture density networks',
-    long_description=long_description,
     long_description_content_type="text/markdown",
     url='https://github.com/dennerepin/StochNetV2',
     author='Denis Repin',
@@ -28,20 +33,11 @@ setup(
         'Programming Language :: Python :: 3.6',
     ],
     keywords='probabilistic models',
-    packages=find_packages(where=here, exclude=[]),
-    install_requires=[
-        'bidict',
-        'gillespy',
-        'graphviz',
-        'h5py',
-        'libsbml',
-        'luigi',
-        'matplotlib',
-        'numpy>=1.16',
-        'scikit-learn',
-        'tensorflow==1.14',
-        'tensorflow-probability==0.7.0',
-        'tqdm',
-    ],
+    packages=find_packages(where=_HERE, exclude=[]),
+    package_data={
+        "stochnet_v2": [
+            "logging.conf"
+        ]},
+    install_requires=_get_requirements(),
     python_requires='>=3.6',
 )

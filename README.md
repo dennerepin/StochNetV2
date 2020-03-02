@@ -4,6 +4,35 @@ Toolbox for stochastic simulations with CRN models or their deep abstractions. \
 Abstract models are based on neural networks predicting a distribution to sample next system state.
 The method is described in details here: https://arxiv.org/abs/2002.01889.
 
+## Installation.
+
+For *Anaconda* or *Miniconda*:
+
+Create virtual environment:
+```bash
+$ conda create -n MyEnv python=3.6
+```
+
+Activate environment and install StochNetV2 and dependencies:
+```bash
+$ conda activate MyEnv
+$ git clone https://github.com/dennerepin/StochNetV2.git
+$ cd StochNetV2
+$ pip install .
+```
+
+Additionally, Gillespy2 library for Gillespie simulations requires installation of StochSS solver, 
+see https://github.com/GillesPy2/GillesPy2 for instructions.
+
+To run experiments in Jupyter notebook:
+```bash
+$ conda install jupyter
+$ conda install nb_conda
+$ conda install ipykernel
+$ python -m ipykernel install --user --name MyEnvKernel
+$ jupyter notebook
+```
+
 ## Table of contents
 1. [CRN_models](#crn_models)
 2. [Dataset](#dataset)

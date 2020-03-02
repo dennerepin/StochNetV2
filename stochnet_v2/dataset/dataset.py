@@ -648,14 +648,16 @@ class HDF5Dataset(BaseDataset):
                 start = batch_idx * bs
                 end = (batch_idx + 1) * bs
                 idxs = data_idxs[start:end]
-                x_batch, y_batch = x.value[idxs], y.value[idxs]
+                idxs = np.sort(idxs)
+                x_batch, y_batch = x[idxs], y[idxs]
                 if self._preprocess_fn is not None:
                     x_batch, y_batch = self._preprocess_fn(x_batch, y_batch)
                 yield x_batch, y_batch
 
             if self._drop_remainder is False:
                 idxs = data_idxs[n_batches * bs:-1]
-                x_batch, y_batch = x.value[idxs], y.value[idxs]
+                idxs = np.sort(idxs)
+                x_batch, y_batch = x[idxs], y[idxs]
                 if self._preprocess_fn is not None:
                     x_batch, y_batch = self._preprocess_fn(x_batch, y_batch)
                 yield x_batch, y_batch

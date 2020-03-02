@@ -41,13 +41,13 @@ def _softplus_inverse(x):
 
 def softplus_activation(x):
     """Softplus activation"""
-    LOGGER.info("Using softplus activation for diagonal")
+    LOGGER.debug("Using softplus activation for diagonal")
     return tf.nn.softplus(x + _softplus_inverse(1.0))
 
 
 def nn_elu_activation(x):
     """Computes the Non-Negative Exponential Linear Unit"""
-    LOGGER.info("Using non-nnegative elu activation for diagonal")
+    LOGGER.debug("Using non-nnegative elu activation for diagonal")
     return tf.add(tf.constant(1, dtype=tf.float32), tf.nn.elu(x))
 
 
@@ -625,8 +625,8 @@ class MixtureOutputLayer(RandomVariableOutputLayer):
 
     def _add_layer_on_top_share(self, base):
         # all components onto the same base
-        LOGGER.info("Mixture components share nn outputs")
-        LOGGER.info(f'base shape: {base.shape.as_list()}')
+        LOGGER.debug("Mixture components share nn outputs")
+        LOGGER.debug(f'base shape: {base.shape.as_list()}')
         with tf.variable_scope(self.name_scope):
             categorical_layer = self.categorical.add_layer_on_top(base)
             components_layers = [component.add_layer_on_top(base) for component in self.components]
@@ -634,14 +634,14 @@ class MixtureOutputLayer(RandomVariableOutputLayer):
             return tf.concat(mixture_layers, axis=-1)
 
     def _add_layer_on_top_individual(self, base):
-        LOGGER.info("Mixture components use individual slices of nn outputs")
+        LOGGER.debug("Mixture components use individual slices of nn outputs")
         # individual slice for each component
         n_slices = len(self.components) + 1
         slice_dim = base.shape.as_list()[-1]
         slice_size = slice_dim // n_slices
         cat_slice_size = slice_size + slice_dim % n_slices
 
-        LOGGER.info(f'base shape: {base.shape.as_list()}')
+        LOGGER.debug(f'base shape: {base.shape.as_list()}')
 
         components_outputs = []
 
@@ -653,8 +653,8 @@ class MixtureOutputLayer(RandomVariableOutputLayer):
                 [-1, cat_slice_size],
                 name='categorical_slice',
             )
-            LOGGER.info(f'categorical: {self.categorical.__class__.__name__} '
-                  f'from 0 for {cat_slice_size} - {categorical_slice.shape.as_list()}')
+            LOGGER.debug(f'categorical: {self.categorical.__class__.__name__} '
+                         f'from 0 for {cat_slice_size} - {categorical_slice.shape.as_list()}')
             categorical_output = self.categorical.add_layer_on_top(categorical_slice)
 
             for i, component in enumerate(self.components):
@@ -664,8 +664,9 @@ class MixtureOutputLayer(RandomVariableOutputLayer):
                     [-1, slice_size],
                     name=f'component_{i}_slice'
                 )
-                LOGGER.info(f'component {i+1}: {component.__class__.__name__} '
-                      f'from {cat_slice_size + i * slice_size} for {slice_size} - {component_slice.shape.as_list()}')
+                LOGGER.debug(f'component {i+1}: {component.__class__.__name__} '
+                             f'from {cat_slice_size + i * slice_size} for {slice_size}'
+                             f' - {component_slice.shape.as_list()}')
                 component_output = component.add_layer_on_top(component_slice)
                 components_outputs.append(component_output)
 
@@ -678,8 +679,8 @@ class MixtureOutputLayer(RandomVariableOutputLayer):
         n_slices = len(self.components) + 1
         cat_slice_size = slice_dim // n_slices  # * 2
 
-        LOGGER.info("Mixture components share nn outputs and categorical has individual slice")
-        LOGGER.info(f'base shape: {base.shape.as_list()}')
+        LOGGER.debug("Mixture components share nn outputs and categorical has individual slice")
+        LOGGER.debug(f'base shape: {base.shape.as_list()}')
 
         components_outputs = []
 
@@ -690,8 +691,8 @@ class MixtureOutputLayer(RandomVariableOutputLayer):
                 [0, 0],
                 [-1, cat_slice_size],
             )
-            LOGGER.info(f'categorical: slice '
-                  f'from 0 for {cat_slice_size} - {categorical_slice.shape.as_list()}')
+            LOGGER.debug(f'categorical: slice '
+                         f'from 0 for {cat_slice_size} - {categorical_slice.shape.as_list()}')
             categorical_output = self.categorical.add_layer_on_top(categorical_slice)
 
             components_slice = tf.slice(
@@ -699,8 +700,9 @@ class MixtureOutputLayer(RandomVariableOutputLayer):
                 [0, cat_slice_size],
                 [-1, slice_dim - cat_slice_size],
             )
-            LOGGER.info(f'components slice: '
-                  f'from {cat_slice_size} for {slice_dim - cat_slice_size} - {components_slice.shape.as_list()}')
+            LOGGER.debug(f'components slice: '
+                         f'from {cat_slice_size} for {slice_dim - cat_slice_size}'
+                         f' - {components_slice.shape.as_list()}')
 
             for i, component in enumerate(self.components):
                 component_output = component.add_layer_on_top(components_slice)
