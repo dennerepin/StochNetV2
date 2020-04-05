@@ -63,6 +63,7 @@ An instance CRN_model class can
 * produce trajectories
 
 
+
     Example:
     from stochnet_v2.CRN_models.SIR import SIR
     
@@ -73,7 +74,7 @@ An instance CRN_model class can
     model = SIR(endtime, timestep)
     initial_settings = model.get_initial_settings(n_settings=1)
     randomized_params = model.get_randomized_parameters(params_to_randomize, n_settings=1)
-    model.set_species_initial_value(initial_settings)
+    model.set_species_initial_value(initial_settings[0])
     model.set_parameters(randomized_params)
     trajectories = model.run()
 

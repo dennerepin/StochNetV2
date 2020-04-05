@@ -166,6 +166,11 @@ class BaseCRNModel(gillespy.Model):
             if name not in self.listOfParameters:
                 raise KeyError(
                     f"Could not find {name} parameter in {self.__class__.__name__} model listOfParameters.")
+            if isinstance(val, np.ndarray):
+                if len(val) != 1:
+                    raise ValueError(
+                        f"Expected a single parameter value, got an array of shape {val.shape}")
+                val = val[0]
             self.set_parameter(name, str(val))
 
 
