@@ -62,9 +62,8 @@ An instance CRN_model class can
 * set initial concentrations and reaction rates
 * produce trajectories
 
+Example:
 
-
-    Example:
     from stochnet_v2.CRN_models.SIR import SIR
     
     endtime=20
