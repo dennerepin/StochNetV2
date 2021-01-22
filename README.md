@@ -2,7 +2,8 @@
 
 Toolbox for stochastic simulations with CRN models or their deep abstractions. \
 Abstract models are based on neural networks predicting a distribution to sample next system state.
-The method is described in details here: https://arxiv.org/abs/2002.01889.
+The method is described in details here: https://arxiv.org/abs/2002.01889, https://link.springer.com/chapter/10.1007/978-3-030-59854-9_4.
+
 
 ## Installation.
 
@@ -953,3 +954,23 @@ of the colony behavior.
 Original idea of using Mixture Density Networks was proposed by Luca Bortolussi & Luca Palmieri 
 (https://link.springer.com/chapter/10.1007/978-3-319-99429-1_2).
 Some code was taken from: https://github.com/LukeMathWalker/StochNet.
+
+
+CITE US:
+
+	@InProceedings{10.1007/978-3-030-59854-9_4,
+	author="Repin, Denis
+	and Phung, Nhat-Huy
+	and Petrov, Tatjana",
+	editor="Gribaudo, Marco
+	and Jansen, David N.
+	and Remke, Anne",
+	title="StochNetV2: A Tool for Automated Deep Abstractions for Stochastic Reaction Networks",
+	booktitle="Quantitative Evaluation of Systems",
+	year="2020",
+	publisher="Springer International Publishing",
+	address="Cham",
+	pages="27--32",
+	abstract="We present a toolbox for stochastic simulations with CRN models and their (automated) deep abstractions: a mixture density deep neural network trained on time-series data produced by the CRN. The optimal neural network architecture is learnt along with learning the transition kernel of the abstract process. Automated search of the architecture makes the method applicable directly to any given CRN, which is time-saving for deep learning experts and crucial for non-specialists. The tool was primarily designed to efficiently reproduce simulation traces of given complex stochastic reaction networks arising in systems biology research, possibly with multi-modal emergent phenotypes. It is at the same time applicable to any other application domain, where time-series measurements of a Markovian stochastic process are available by experiment or synthesised with simulation (e.g. are obtained from a rule-based description of the CRN).",
+	isbn="978-3-030-59854-9"
+	}
