@@ -948,14 +948,8 @@ of the colony behavior.
 
 ![alt text](https://github.com/dennerepin/gif/blob/master/animated_progress_nann.gif?raw=true)
 
-
 \
 \
-Original idea of using Mixture Density Networks was proposed by Luca Bortolussi & Luca Palmieri 
-(https://link.springer.com/chapter/10.1007/978-3-319-99429-1_2).
-Some code was taken from: https://github.com/LukeMathWalker/StochNet.
-
-
 CITE US:
 
 	@InProceedings{10.1007/978-3-030-59854-9_4,
@@ -974,3 +968,14 @@ CITE US:
 	abstract="We present a toolbox for stochastic simulations with CRN models and their (automated) deep abstractions: a mixture density deep neural network trained on time-series data produced by the CRN. The optimal neural network architecture is learnt along with learning the transition kernel of the abstract process. Automated search of the architecture makes the method applicable directly to any given CRN, which is time-saving for deep learning experts and crucial for non-specialists. The tool was primarily designed to efficiently reproduce simulation traces of given complex stochastic reaction networks arising in systems biology research, possibly with multi-modal emergent phenotypes. It is at the same time applicable to any other application domain, where time-series measurements of a Markovian stochastic process are available by experiment or synthesised with simulation (e.g. are obtained from a rule-based description of the CRN).",
 	isbn="978-3-030-59854-9"
 	}
+	
+\
+\
+Original idea of using Mixture Density Networks was proposed by Luca Bortolussi & Luca Palmieri 
+(https://link.springer.com/chapter/10.1007/978-3-319-99429-1_2).
+Some code was taken from: https://github.com/LukeMathWalker/StochNet.
+
+\
+\
+The project has been supported by the DFG Centre of Excellence 2117 ["Centre for the Advanced Study of Collective Behaviour"](https://www.dfg.de/en/funded_projects/current_projects_programmes/list/projectdetails/index.jsp?id=390829875&sort=nr_asc&prg=EXS) (*ID: 422037984*),
+and Young Scholar Fund (YSF), project no. *P83943018 FP 430\_/18*.
