@@ -2,7 +2,7 @@
 
 Toolbox for stochastic simulations with CRN models or their deep abstractions. \
 Abstract models are based on neural networks predicting a distribution to sample next system state.
-The method is described in details here: https://arxiv.org/abs/2002.01889, https://link.springer.com/chapter/10.1007/978-3-030-59854-9_4.
+The method is described in details here: https://doi.org/10.1016/j.ic.2021.104788, https://arxiv.org/abs/2002.01889, https://link.springer.com/chapter/10.1007/978-3-030-59854-9_4.
 
 
 ## Installation.
