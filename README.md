@@ -952,22 +952,18 @@ of the colony behavior.
 \
 CITE US:
 
-	@InProceedings{10.1007/978-3-030-59854-9_4,
-	author="Repin, Denis
-	and Phung, Nhat-Huy
-	and Petrov, Tatjana",
-	editor="Gribaudo, Marco
-	and Jansen, David N.
-	and Remke, Anne",
-	title="StochNetV2: A Tool for Automated Deep Abstractions for Stochastic Reaction Networks",
-	booktitle="Quantitative Evaluation of Systems",
-	year="2020",
-	publisher="Springer International Publishing",
-	address="Cham",
-	pages="27--32",
-	abstract="We present a toolbox for stochastic simulations with CRN models and their (automated) deep abstractions: a mixture density deep neural network trained on time-series data produced by the CRN. The optimal neural network architecture is learnt along with learning the transition kernel of the abstract process. Automated search of the architecture makes the method applicable directly to any given CRN, which is time-saving for deep learning experts and crucial for non-specialists. The tool was primarily designed to efficiently reproduce simulation traces of given complex stochastic reaction networks arising in systems biology research, possibly with multi-modal emergent phenotypes. It is at the same time applicable to any other application domain, where time-series measurements of a Markovian stochastic process are available by experiment or synthesised with simulation (e.g. are obtained from a rule-based description of the CRN).",
-	isbn="978-3-030-59854-9"
-	}
+	@article{REPIN2021104788,
+title = {Automated Deep Abstractions for Stochastic Chemical Reaction Networks},
+journal = {Information and Computation},
+pages = {104788},
+year = {2021},
+issn = {0890-5401},
+doi = {https://doi.org/10.1016/j.ic.2021.104788},
+url = {https://www.sciencedirect.com/science/article/pii/S0890540121001048},
+author = {Denis Repin and Tatjana Petrov},
+keywords = {Model abstraction, Stochastic simulation, Chemical Reaction Networks, Deep learning, Neural architecture search},
+abstract = {Predicting stochastic cellular dynamics as emerging from the mechanistic models of molecular interactions is a long-standing challenge in systems biology: low-level chemical reaction network (CRN) models give rise to a highly-dimensional continuous-time Markov chain (CTMC) which is computationally demanding and often prohibitive to analyse in practice. A recently proposed abstraction method uses deep learning to replace this CTMC with a discrete-time continuous-space process, by training a mixture density deep neural network with traces sampled at regular time intervals (which can be obtained either by simulating a given CRN or as time-series data from experiment). The major advantage of such abstraction is that it produces a computational model that is dramatically cheaper to execute, while it preserves the statistical features of the training data. In general, the abstraction accuracy improves with the amount of training data. However, depending on the CRN, the overall quality of the method – the efficiency gain and abstraction accuracy – will also depend on the choice of neural network architecture given by hyper-parameters such as the layer types and connections between them. As a consequence, in practice, the modeller has to take care of finding the suitable architecture manually, for each given CRN, through a tedious and time-consuming trial-and-error cycle. In this paper, we propose to further automatise deep abstractions for stochastic CRNs, through learning the neural network architecture along with learning the transition kernel of the abstract process. Automated search of the architecture makes the method applicable directly to any given CRN, which is time-saving for deep learning experts and crucial for non-specialists. We implement the method and demonstrate its performance on a number of representative CRNs with multi-modal emergent phenotypes. Moreover, we showcase that deep abstractions can be used for efficient multi-scale simulations, which are otherwise computationally intractable. To this end, we define a scenario where multiple CRN instances interact across a spatial grid via shared species. Finally, we discuss the limitations and challenges arising when using deep abstractions.}
+}
 	
 \
 \
